@@ -14,6 +14,9 @@ import sys
 from pathlib import Path
 from enhanced_extraction import enhanced_pdf_extraction, improved_matching_algorithm
 from qwen_api import QwenOCR
+from enhanced_extraction import enhanced_pdf_extraction
+from comparison_algorithm_example import compare_documents
+from custom_ai import CustomAI
 
 # 檢查sentence-transformers是否可用
 try:
@@ -164,9 +167,23 @@ st.markdown("""
 st.markdown('<h1 class="main-header">期刊比對系統</h1>', unsafe_allow_html=True)
 st.markdown('本系統用於比對原始Word文件與美編後PDF文件的內容差異，幫助校對人員快速找出不一致之處。')
 
-from enhanced_extraction import enhanced_pdf_extraction
-from comparison_algorithm_example import compare_documents
-from custom_ai import CustomAI
+# Sidebar 設定
+with st.sidebar:
+    st.header("⚙️ 比對設定")
+
+    comparison_mode = st.selectbox("比對模式", ["exact", "semantic", "hybrid", "ai"])
+    similarity_threshold = st.slider("相似度閾值", 0.0, 1.0, 0.6, 0.05)
+    use_ocr = st.checkbox("啟用 OCR", value=False)
+    use_ai = st.checkbox("使用生成式 AI", value=False)
+    ai_key = st.text_input("🔑 請輸入 AI API 金鑰", type="password") if use_ai else None
+
+    st.divider()
+    st.subheader("🧹 忽略規則")
+    ignore_whitespace = st.checkbox("忽略空格", value=True)
+    ignore_punctuation = st.checkbox("忽略標點符號", value=True)
+    ignore_case = st.checkbox("忽略大小寫", value=True)
+    ignore_linebreaks = st.checkbox("忽略斷行", value=True)
+
 
 st.header("📁 文件上傳")
 
