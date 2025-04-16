@@ -486,5 +486,5 @@ class GenerativeAI:
             client = anthropic.Anthropic(api_key=self.api_key)
             
             # 準備數據
-            source_texts = [p['content'] for p in source_paragra
+            source_texts = [p['content'] for p in source_paragra]
 (Content truncated due to size limit. Use line ranges to read in chunks)
