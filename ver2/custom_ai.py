@@ -430,5 +430,4 @@ class CustomAI:
                     4. 改進建議
                     
                     請以簡潔專業的語言回答，不要添加無關內容。
-                    
-(Content truncated due to size limit. Use line ranges to read in chunks)
+                 """}
