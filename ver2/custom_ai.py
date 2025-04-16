@@ -12,7 +12,7 @@ class CustomAI:
     def __init__(self, api_key=None, api_url=None, model_name=None):
         self.api_key = api_key
         self.api_url = api_url
-        self.model_name = model_name or "gpt-3.5-turbo"  # 默認模型
+        self.model_name = model_name or "gpt-4o"  # 默認模型
         
         # 使用免費API
         self.use_free_api = api_url is None and (api_key is None or api_key.strip() == "")
