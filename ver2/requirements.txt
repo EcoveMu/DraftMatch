@@ -15,3 +15,5 @@ anthropic
 transformers
 torch
 scipy
+pdf2image
+
