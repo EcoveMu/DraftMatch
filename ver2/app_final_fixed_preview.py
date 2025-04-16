@@ -165,7 +165,7 @@ st.markdown('<h1 class="main-header">期刊比對系統</h1>', unsafe_allow_html
 st.markdown('本系統用於比對原始Word文件與美編後PDF文件的內容差異，幫助校對人員快速找出不一致之處。')
 
 from enhanced_extraction import enhanced_pdf_extraction
-from comparison_algorithm import compare_documents
+from comparison_algorithm_example import compare_documents
 from custom_ai import CustomAI
 
 st.header("📁 文件上傳")
