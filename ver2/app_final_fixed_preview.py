@@ -164,6 +164,74 @@ st.markdown("""
 st.markdown('<h1 class="main-header">期刊比對系統</h1>', unsafe_allow_html=True)
 st.markdown('本系統用於比對原始Word文件與美編後PDF文件的內容差異，幫助校對人員快速找出不一致之處。')
 
+from enhanced_extraction import enhanced_pdf_extraction
+from comparison_algorithm import compare_documents
+from custom_ai import CustomAI
+
+st.header("📁 文件上傳")
+
+col1, col2 = st.columns(2)
+with col1:
+    word_file = st.file_uploader("上傳原始 Word 文稿", type=["docx"])
+with col2:
+    pdf_file = st.file_uploader("上傳美編後 PDF 文件", type=["pdf"])
+
+similarity_threshold = st.slider("相似度閾值", 0.0, 1.0, 0.6, 0.05)
+use_ai = st.checkbox("使用生成式 AI 進行語意比對", value=False)
+ai_key = st.text_input("🔑 請輸入你的 AI API 金鑰", type="password") if use_ai else None
+
+if st.button("開始比對"):
+    if word_file is None or pdf_file is None:
+        st.warning("請先上傳 Word 與 PDF 檔案")
+    else:
+        st.info("🧠 開始比對中...")
+
+        # 1. 保存上傳檔案至暫存
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp_word:
+            tmp_word.write(word_file.read())
+            word_path = tmp_word.name
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_pdf:
+            tmp_pdf.write(pdf_file.read())
+            pdf_path = tmp_pdf.name
+
+        # 2. 進行文字抽取
+        word_data, pdf_data = enhanced_pdf_extraction(word_path, pdf_path)
+
+        # 3. 建立 AI 模型（如啟用）
+        ai_instance = None
+        if use_ai and ai_key:
+            ai_instance = CustomAI(api_key=ai_key, model_name="Qwen")
+
+        # 4. 執行比對演算法
+        ignore_options = {
+            "ignore_whitespace": True,
+            "ignore_punctuation": True,
+            "ignore_case": True,
+            "ignore_linebreaks": True,
+        }
+
+        result = compare_documents(
+            word_data,
+            pdf_data,
+            ignore_options=ignore_options,
+            comparison_mode="hybrid" if use_ai else "exact",
+            similarity_threshold=similarity_threshold,
+            ai_instance=ai_instance
+        )
+
+        # 5. 顯示結果
+        if result:
+            st.success(f"比對完成，共處理 {len(result)} 組段落！")
+            for item in result:
+                st.markdown("### 📌 差異段落")
+                st.markdown(f"- **原始：** {item['doc1_text']}")
+                st.markdown(f"- **PDF：** {item['doc2_text']}")
+                st.markdown(f"- **相似度：** {item['similarity']:.2f}")
+                st.markdown("---")
+        else:
+            st.warning("未比對到有效段落，請檢查文件內容是否正確。")
+
+
 # 檢查Java是否安裝
 def is_java_installed():
     try:
