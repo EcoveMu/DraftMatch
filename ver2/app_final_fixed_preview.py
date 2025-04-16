@@ -49,3 +49,4 @@ st.markdown("""
     .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
         color: white;
     }
+    """)
