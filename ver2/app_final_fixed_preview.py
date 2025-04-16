@@ -477,16 +477,19 @@ class GenerativeAI:
             st.error(f"OpenAI API匹配失敗: {e}")
             return None
     
-    def _match_with_anthropic(self, source_paragraphs, target_paragraphs):
-        """使用Anthropic API匹配段落"""
-        try:
-            import anthropic
-            
-            # 設置API密鑰
-            client = anthropic.Anthropic(api_key=self.api_key)
-            
-            # 準備數據
-            source_texts = [p['content'] for p in source_paragra]
-            except Exception as e:
-            st.error(f"Anthropic API 匹配失敗：{e}")
+def _match_with_anthropic(self, source_paragraphs, target_paragraphs):
+    """使用Anthropic API匹配段落"""
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=self.api_key)
+
+        # 準備資料
+        source_texts = [p['content'] for p in source_paragraphs]
+        target_texts = [p['content'] for p in target_paragraphs]
+
+        # TODO: 加入Anthropic API調用邏輯
+        return []  # 暫時返回空結果作為占位
+    except Exception as e:
+        st.error(f"Anthropic API 匹配失敗：{e}")
         return None
+
