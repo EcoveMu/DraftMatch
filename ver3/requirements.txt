@@ -6,3 +6,4 @@ pillow==10.2.0
 requests==2.31.0
 numpy==1.26.3
 pdfplumber
+pytesseract
