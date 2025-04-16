@@ -12,11 +12,7 @@ import json
 import shutil
 import sys
 from pathlib import Path
-from enhanced_extraction import enhanced_pdf_extraction, improved_matching_algorithm
-from qwen_api import QwenOCR
-from enhanced_extraction import enhanced_pdf_extraction
-from comparison_algorithm_example import compare_documents
-from custom_ai import CustomAI
+import fitz  # PyMuPDF
 
 # 檢查sentence-transformers是否可用
 try:
@@ -24,6 +20,41 @@ try:
     SENTENCE_TRANSFORMERS_AVAILABLE = True
 except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
+
+# 檢查easyocr是否可用
+try:
+    import easyocr
+    EASYOCR_AVAILABLE = True
+except ImportError:
+    EASYOCR_AVAILABLE = False
+
+# 檢查tabula是否可用
+try:
+    import tabula
+    TABULA_AVAILABLE = True
+except ImportError:
+    TABULA_AVAILABLE = False
+
+# 檢查pdfplumber是否可用
+try:
+    import pdfplumber
+    PDFPLUMBER_AVAILABLE = True
+except ImportError:
+    PDFPLUMBER_AVAILABLE = False
+
+# 檢查pytesseract是否可用
+try:
+    import pytesseract
+    PYTESSERACT_AVAILABLE = True
+except ImportError:
+    PYTESSERACT_AVAILABLE = False
+
+# 檢查qwen_ocr模組是否可用
+try:
+    from qwen_ocr import QwenOCR
+    QWEN_OCR_AVAILABLE = True
+except ImportError:
+    QWEN_OCR_AVAILABLE = False
 
 # 設置頁面配置
 st.set_page_config(
@@ -201,6 +232,8 @@ if 'similarity_threshold' not in st.session_state:
     st.session_state.similarity_threshold = 0.6
 if 'use_ocr' not in st.session_state:
     st.session_state.use_ocr = False
+if 'ocr_engine' not in st.session_state:
+    st.session_state.ocr_engine = "Qwen"
 if 'use_ai' not in st.session_state:
     st.session_state.use_ai = False
 if 'ai_key' not in st.session_state:
@@ -231,21 +264,40 @@ with st.sidebar:
         0.05
     )
     
+    st.divider()
+    st.subheader("🔍 OCR設置")
+    
     st.session_state.use_ocr = st.checkbox(
         "啟用 OCR", 
         value=st.session_state.use_ocr
     )
+    
+    if st.session_state.use_ocr:
+        st.session_state.ocr_engine = st.radio(
+            "OCR引擎",
+            ["Qwen", "EasyOCR", "Tesseract", "自定義API"],
+            index=["Qwen", "EasyOCR", "Tesseract", "自定義API"].index(st.session_state.ocr_engine)
+        )
+        
+        if st.session_state.ocr_engine == "Qwen" or st.session_state.ocr_engine == "自定義API":
+            st.session_state.ai_key = st.text_input(
+                "🔑 請輸入 OCR API 金鑰", 
+                type="password",
+                value=st.session_state.ai_key
+            )
+    
+    st.divider()
+    st.subheader("🤖 生成式AI設置")
     
     st.session_state.use_ai = st.checkbox(
         "使用生成式 AI", 
         value=st.session_state.use_ai
     )
     
-    if st.session_state.use_ai:
+    if st.session_state.use_ai and not st.session_state.ai_key:
         st.session_state.ai_key = st.text_input(
             "🔑 請輸入 AI API 金鑰", 
-            type="password",
-            value=st.session_state.ai_key
+            type="password"
         )
 
     st.divider()
@@ -295,6 +347,349 @@ with col2:
 
 # 使用示例文件選項
 use_example_files = st.checkbox("使用示例文件進行演示", value=False)
+
+# 文本提取和處理函數
+def extract_text_from_word(word_file):
+    """從Word文件中提取文本"""
+    doc = docx.Document(word_file)
+    
+    paragraphs = []
+    tables = []
+    
+    # 提取段落
+    for i, para in enumerate(doc.paragraphs):
+        text = para.text.strip()
+        if text:
+            paragraphs.append({
+                "index": i,
+                "content": text,
+                "type": "paragraph"
+            })
+    
+    # 提取表格
+    for i, table in enumerate(doc.tables):
+        table_data = []
+        for row in table.rows:
+            row_data = []
+            for cell in row.cells:
+                row_data.append(cell.text.strip())
+            table_data.append(row_data)
+        
+        if any(any(cell for cell in row) for row in table_data):
+            tables.append({
+                "index": i,
+                "content": table_data,
+                "type": "table"
+            })
+    
+    return {
+        "paragraphs": paragraphs,
+        "tables": tables
+    }
+
+def extract_text_from_pdf(pdf_file):
+    """從PDF文件中提取文本（使用PyMuPDF）"""
+    doc = fitz.open(pdf_file)
+    
+    paragraphs = []
+    page_texts = []
+    
+    for page_num in range(len(doc)):
+        page = doc[page_num]
+        text = page.get_text()
+        page_texts.append(text)
+        
+        # 簡單地按行分割文本
+        lines = text.split('\n')
+        for i, line in enumerate(lines):
+            line = line.strip()
+            if line:
+                paragraphs.append({
+                    "index": len(paragraphs),
+                    "content": line,
+                    "type": "paragraph",
+                    "page": page_num + 1
+                })
+    
+    return {
+        "paragraphs": paragraphs,
+        "tables": [],  # 簡化版本不提取表格
+        "page_texts": page_texts
+    }
+
+def enhanced_pdf_extraction(word_path, pdf_path):
+    """增強版的文檔提取函數"""
+    # 提取Word文檔內容
+    if word_path.endswith('.docx'):
+        word_data = extract_text_from_word(word_path)
+    else:
+        # 如果不是.docx文件，嘗試作為文本文件讀取
+        try:
+            with open(word_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                paragraphs = []
+                for i, para in enumerate(content.split('\n\n')):
+                    para = para.strip()
+                    if para:
+                        paragraphs.append({
+                            "index": i,
+                            "content": para,
+                            "type": "paragraph"
+                        })
+                word_data = {
+                    "paragraphs": paragraphs,
+                    "tables": []
+                }
+        except Exception as e:
+            st.error(f"無法讀取Word文件: {e}")
+            return None, None
+    
+    # 提取PDF文檔內容
+    if pdf_path.endswith('.pdf'):
+        pdf_data = extract_text_from_pdf(pdf_path)
+    else:
+        # 如果不是.pdf文件，嘗試作為文本文件讀取
+        try:
+            with open(pdf_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                paragraphs = []
+                for i, para in enumerate(content.split('\n\n')):
+                    para = para.strip()
+                    if para:
+                        paragraphs.append({
+                            "index": i,
+                            "content": para,
+                            "type": "paragraph",
+                            "page": 1  # 假設只有一頁
+                        })
+                pdf_data = {
+                    "paragraphs": paragraphs,
+                    "tables": [],
+                    "page_texts": [content]
+                }
+        except Exception as e:
+            st.error(f"無法讀取PDF文件: {e}")
+            return None, None
+    
+    return word_data, pdf_data
+
+def improved_matching_algorithm(word_data, pdf_data, similarity_threshold=0.6):
+    """改進的匹配算法"""
+    matches = []
+    
+    # 對每個Word段落，找到最相似的PDF段落
+    for word_para in word_data["paragraphs"]:
+        best_match = None
+        best_similarity = 0
+        
+        for pdf_para in pdf_data["paragraphs"]:
+            # 使用difflib計算相似度
+            similarity = difflib.SequenceMatcher(None, word_para["content"], pdf_para["content"]).ratio()
+            
+            if similarity > best_similarity:
+                best_similarity = similarity
+                best_match = pdf_para
+        
+        # 如果找到足夠相似的匹配
+        if best_match and best_similarity >= similarity_threshold:
+            matches.append({
+                "doc1_index": word_para["index"],
+                "doc1_text": word_para["content"],
+                "doc2_index": best_match["index"],
+                "doc2_text": best_match["content"],
+                "similarity": best_similarity,
+                "page_number": best_match.get("page", None)
+            })
+    
+    return matches
+
+# 比對算法
+def compare_documents(doc1_data, doc2_data, ignore_options=None, comparison_mode="hybrid", similarity_threshold=0.6, ai_instance=None):
+    """比對兩個文檔的內容"""
+    if ignore_options is None:
+        ignore_options = {
+            "ignore_whitespace": True,
+            "ignore_punctuation": True,
+            "ignore_case": True,
+            "ignore_linebreaks": True
+        }
+    
+    # 預處理文本
+    def preprocess_text(text):
+        if ignore_options.get("ignore_whitespace", False):
+            text = re.sub(r'\s+', ' ', text)
+        if ignore_options.get("ignore_punctuation", False):
+            text = re.sub(r'[^\w\s]', '', text)
+        if ignore_options.get("ignore_case", False):
+            text = text.lower()
+        if ignore_options.get("ignore_linebreaks", False):
+            text = text.replace('\n', ' ')
+        return text.strip()
+    
+    # 預處理所有段落
+    for para in doc1_data["paragraphs"]:
+        para["processed_content"] = preprocess_text(para["content"])
+    
+    for para in doc2_data["paragraphs"]:
+        para["processed_content"] = preprocess_text(para["content"])
+    
+    # 根據比對模式選擇不同的算法
+    if comparison_mode == "exact":
+        # 精確比對
+        matches = []
+        for doc1_para in doc1_data["paragraphs"]:
+            for doc2_para in doc2_data["paragraphs"]:
+                if doc1_para["processed_content"] == doc2_para["processed_content"]:
+                    matches.append({
+                        "doc1_index": doc1_para["index"],
+                        "doc1_text": doc1_para["content"],
+                        "doc2_index": doc2_para["index"],
+                        "doc2_text": doc2_para["content"],
+                        "similarity": 1.0,
+                        "page_number": doc2_para.get("page", None)
+                    })
+                    break
+        
+        # 對於沒有精確匹配的段落，使用模糊匹配
+        for doc1_para in doc1_data["paragraphs"]:
+            if not any(match["doc1_index"] == doc1_para["index"] for match in matches):
+                best_match = None
+                best_similarity = 0
+                
+                for doc2_para in doc2_data["paragraphs"]:
+                    similarity = difflib.SequenceMatcher(None, doc1_para["processed_content"], doc2_para["processed_content"]).ratio()
+                    
+                    if similarity > best_similarity and similarity >= similarity_threshold:
+                        best_similarity = similarity
+                        best_match = doc2_para
+                
+                if best_match:
+                    matches.append({
+                        "doc1_index": doc1_para["index"],
+                        "doc1_text": doc1_para["content"],
+                        "doc2_index": best_match["index"],
+                        "doc2_text": best_match["content"],
+                        "similarity": best_similarity,
+                        "page_number": best_match.get("page", None)
+                    })
+    
+    elif comparison_mode == "semantic":
+        # 語意比對
+        if SENTENCE_TRANSFORMERS_AVAILABLE and ai_instance and ai_instance.is_available():
+            # 使用AI進行語意比對
+            matches = ai_instance.match_paragraphs(doc1_data["paragraphs"], doc2_data["paragraphs"])
+        else:
+            # 如果AI不可用，退回到模糊比對
+            matches = improved_matching_algorithm(doc1_data, doc2_data, similarity_threshold)
+    
+    elif comparison_mode == "hybrid" or comparison_mode == "ai":
+        # 混合比對或AI比對
+        matches = improved_matching_algorithm(doc1_data, doc2_data, similarity_threshold)
+    
+    else:
+        # 默認使用模糊比對
+        matches = improved_matching_algorithm(doc1_data, doc2_data, similarity_threshold)
+    
+    # 為每個匹配生成差異標記
+    for match in matches:
+        # 字符級別差異
+        d = difflib.Differ()
+        diff = list(d.compare(match["doc1_text"], match["doc2_text"]))
+        
+        # 生成HTML差異顯示
+        html_diff = []
+        for i, s in enumerate(diff):
+            if s.startswith('  '):  # 相同
+                html_diff.append(s[2:])
+            elif s.startswith('- '):  # 刪除
+                if i+1 < len(diff) and diff[i+1].startswith('? '):
+                    # 有標記，使用字符級別差異
+                    markers = diff[i+1][2:]
+                    s = s[2:]
+                    html_s = ""
+                    for j, c in enumerate(s):
+                        if j < len(markers) and markers[j] in '-^':
+                            html_s += f'<span class="diff-char-removed">{c}</span>'
+                        else:
+                            html_s += c
+                    html_diff.append(f'<span class="diff-removed">{html_s}</span>')
+                else:
+                    # 沒有標記，使用行級別差異
+                    html_diff.append(f'<span class="diff-removed">{s[2:]}</span>')
+            elif s.startswith('+ '):  # 添加
+                if i+1 < len(diff) and diff[i+1].startswith('? '):
+                    # 有標記，使用字符級別差異
+                    markers = diff[i+1][2:]
+                    s = s[2:]
+                    html_s = ""
+                    for j, c in enumerate(s):
+                        if j < len(markers) and markers[j] in '+^':
+                            html_s += f'<span class="diff-char-added">{c}</span>'
+                        else:
+                            html_s += c
+                    html_diff.append(f'<span class="diff-added">{html_s}</span>')
+                else:
+                    # 沒有標記，使用行級別差異
+                    html_diff.append(f'<span class="diff-added">{s[2:]}</span>')
+            elif s.startswith('? '):  # 標記行，已在上面處理
+                continue
+        
+        match["diff_html"] = ''.join(html_diff)
+    
+    return matches
+
+# 自定義AI類
+class CustomAI:
+    def __init__(self, api_key=None, model_name=None):
+        self.api_key = api_key
+        self.model_name = model_name
+    
+    def is_available(self):
+        """檢查API是否可用"""
+        return self.api_key is not None and len(self.api_key) > 0
+    
+    def match_paragraphs(self, source_paragraphs, target_paragraphs):
+        """使用AI匹配段落"""
+        # 簡化版本，實際上只是使用改進的匹配算法
+        matches = []
+        
+        for source_para in source_paragraphs:
+            best_match = None
+            best_similarity = 0
+            
+            for target_para in target_paragraphs:
+                # 使用difflib計算相似度
+                similarity = difflib.SequenceMatcher(None, source_para["content"], target_para["content"]).ratio()
+                
+                if similarity > best_similarity:
+                    best_similarity = similarity
+                    best_match = target_para
+            
+            # 如果找到足夠相似的匹配
+            if best_match and best_similarity >= 0.6:
+                matches.append({
+                    "doc1_index": source_para["index"],
+                    "doc1_text": source_para["content"],
+                    "doc2_index": best_match["index"],
+                    "doc2_text": best_match["content"],
+                    "similarity": best_similarity,
+                    "page_number": best_match.get("page", None)
+                })
+        
+        return matches
+
+# 創建一個簡單的QwenOCR類，如果原始模組不可用
+if not QWEN_OCR_AVAILABLE:
+    class QwenOCR:
+        def __init__(self, api_key=None, api_url=None):
+            self.api_key = api_key
+            self.api_url = api_url
+        
+        def is_available(self):
+            return self.api_key is not None and len(self.api_key) > 0
+        
+        def extract_text_from_image(self, image_path):
+            return "OCR功能需要安裝qwen_ocr模組"
 
 if st.button("開始比對"):
     if (word_file is None or pdf_file is None) and not use_example_files:
@@ -392,91 +787,21 @@ if st.button("開始比對"):
                     if "diff_html" in item and item["diff_html"]:
                         st.markdown("**差異顯示:**")
                         st.markdown(item["diff_html"], unsafe_allow_html=True)
+                    
+                    # 顯示PDF頁面預覽
+                    if "page_number" in item and item["page_number"] and os.path.exists(pdf_path):
+                        st.markdown("**PDF頁面預覽:**")
+                        try:
+                            doc = fitz.open(pdf_path)
+                            page_num = item["page_number"] - 1  # 頁碼從1開始，但PyMuPDF從0開始
+                            if 0 <= page_num < len(doc):
+                                page = doc[page_num]
+                                pix = page.get_pixmap(matrix=fitz.Matrix(300/72, 300/72))
+                                img_bytes = pix.tobytes("png")
+                                st.image(img_bytes, caption=f"頁碼: {item['page_number']}")
+                            else:
+                                st.warning(f"頁碼 {item['page_number']} 超出範圍")
+                        except Exception as e:
+                            st.error(f"無法顯示PDF頁面: {e}")
         else:
             st.warning("未比對到有效段落，請檢查文件內容是否正確。")
-
-
-# 檢查Java是否安裝
-def is_java_installed():
-    try:
-        result = os.system("java -version > /dev/null 2>&1")
-        return result == 0
-    except:
-        return False
-
-# 檢查EasyOCR是否可用
-def is_easyocr_available():
-    try:
-        import easyocr
-        return True
-    except ImportError:
-        return False
-
-# 檢查tabula-py是否可用
-def is_tabula_available():
-    if not is_java_installed():
-        return False
-    try:
-        import tabula
-        return True
-    except ImportError:
-        return False
-
-# 檢查sentence-transformers是否可用
-def is_sentence_transformers_available():
-    return SENTENCE_TRANSFORMERS_AVAILABLE
-
-# 加載語義模型
-@st.cache_resource
-def load_semantic_model():
-    if is_sentence_transformers_available():
-        try:
-            model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
-            return model
-        except Exception as e:
-            st.error(f"加載語義模型失敗: {e}")
-            return None
-    return None
-
-# 生成式AI模型類
-class GenerativeAI:
-    def __init__(self, model_name, api_key=None):
-        self.model_name = model_name
-        self.api_key = api_key
-        self.is_available = self._check_availability()
-    
-    def _check_availability(self):
-        """檢查模型是否可用"""
-        if self.model_name in ["BERT多語言模型", "MPNet中文模型", "RoBERTa中文模型"]:
-            # 檢查本地模型
-            try:
-                from transformers import AutoModel, AutoTokenizer
-                return True
-            except ImportError:
-                return False
-        elif self.model_name in ["OpenAI API", "Anthropic API", "Gemini API", "Qwen API"]:
-            # 檢查API模型
-            return self.api_key is not None and len(self.api_key) > 0
-        return False
-    
-    def match_paragraphs(self, source_paragraphs, target_paragraphs):
-        """使用生成式AI匹配段落"""
-        if not self.is_available:
-            return None
-        
-        if self.model_name == "BERT多語言模型":
-            return self._match_with_bert(source_paragraphs, target_paragraphs)
-        elif self.model_name == "MPNet中文模型":
-            return self._match_with_mpnet(source_paragraphs, target_paragraphs)
-        elif self.model_name == "RoBERTa中文模型":
-            return self._match_with_roberta(source_paragraphs, target_paragraphs)
-        elif self.model_name == "OpenAI API":
-            return self._match_with_openai(source_paragraphs, target_paragraphs)
-        elif self.model_name == "Anthropic API":
-            return self._match_with_anthropic(source_paragraphs, target_paragraphs)
-        elif self.model_name == "Gemini API":
-            return self._match_with_gemini(source_paragraphs, target_paragraphs)
-        elif self.model_name == "Qwen API":
-            return self._match_with_qwen(source_paragraphs, target_paragraphs)
-        
-        return None
