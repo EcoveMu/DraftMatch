@@ -1,6 +1,7 @@
-streamlit
-python-docx
-pymupdf
-Pillow
-requests
-numpy
+streamlit==1.32.0
+pymupdf==1.23.8
+python-docx==1.1.0
+pandas==2.1.4
+pillow==10.2.0
+requests==2.31.0
+numpy==1.26.3
