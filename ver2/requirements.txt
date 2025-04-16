@@ -4,5 +4,4 @@ pdfplumber
 PyMuPDF
 Pillow
 requests
-qwen
 tqdm
