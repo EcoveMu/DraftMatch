@@ -452,5 +452,5 @@ def file_upload_section():
                     pdf_doc.close()
                     
                     # 如果使用OCR，為不同的段落標記位置
-                    if st.session_state.use_ocr and (st.session_state.ocr_engine == "Qwen" or st.session_state.ocr_engine == "自定義API") and ocr
+                    if st.session_state.use_ocr and (st.session_state.ocr_engine == "Qwen" or st.session_state.ocr_engine == "自定義API") and ocr:
 (Content truncated due to size limit. Use line ranges to read in chunks)
