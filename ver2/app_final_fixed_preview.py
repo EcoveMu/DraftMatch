@@ -487,3 +487,6 @@ class GenerativeAI:
             
             # 準備數據
             source_texts = [p['content'] for p in source_paragra]
+            except Exception as e:
+            st.error(f"Anthropic API 匹配失敗：{e}")
+        return None
