@@ -1,4 +1,3 @@
-@ -0,0 +1,433 @@
 import requests
 import base64
 from PIL import Image
