@@ -180,6 +180,27 @@ def extract_and_process_documents(word_file, pdf_file, use_ocr=False, ocr_engine
     for i, para in enumerate(pdf_paragraphs):
         pdf_paragraphs[i]["content"] = clean_extracted_text(para["content"])
     
+    # 如果使用OCR，則使用OCR提取PDF文本
+    if use_ocr and ocr_engine == "Qwen" and ocr:
+        # 使用Qwen OCR提取文本
+        ocr_results = ocr.extract_text_from_pdf(pdf_file)
+        
+        # 如果OCR成功，則使用OCR結果
+        if ocr_results and not isinstance(ocr_results, str):
+            pdf_paragraphs = []
+            for page_num, page_text in ocr_results.items():
+                # 分割文本為段落
+                page_paragraphs = [p.strip() for p in page_text.split('\n\n') if p.strip()]
+                
+                # 添加頁碼信息
+                for i, para_text in enumerate(page_paragraphs):
+                    pdf_paragraphs.append({
+                        "index": len(pdf_paragraphs),
+                        "content": clean_extracted_text(para_text),
+                        "type": "paragraph",
+                        "page": page_num
+                    })
+    
     pdf_data = {
         "paragraphs": pdf_paragraphs,
         "tables": []  # 暫時不處理表格

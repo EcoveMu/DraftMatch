@@ -1,0 +1,5 @@
+app_improved_with_qwen.py（功能模塊,供了完整的Web界面）
+generative_ai.py（Qwen AI功能實現）
+text_extraction.py（文本提取功能）
+comparison_algorithm.py（比對算法實現）
+qwen_ocr.py（OCR功能實現）
