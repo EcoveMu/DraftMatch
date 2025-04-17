@@ -683,7 +683,7 @@ def display_comparison_results():
                             st.markdown(f"**表格 {detail['original_index'] + 1}**")
                             st.markdown(f"相似度: {detail['similarity']:.2f}")
                             st.markdown(f"頁碼: {detail['matched_page']}")
-                        
+                    try:    
                         with col2:
                             # 顯示原始表格和匹配表格
                             st.markdown("**原始表格:**")
@@ -698,46 +698,8 @@ def display_comparison_results():
                                 df2 = pd.DataFrame(detail["matched_table"])
                                 st.dataframe(df2)
                             else:
-                                st.markdown("未找到匹配表格")
-                            
-                            # 顯示差異
-                            if detail["diff_html"]:
-                                st.markdown("**差異:**")
-                                st.markdown(detail["diff_html"], unsafe_allow_html=True)
-                        
-                        # 顯示PDF頁面預覽
-                        if detail["matched_page"] != "未找到":
-                            try:
-                                page_num = int(detail["matched_page"])
-                                if page_num in st.session_state.pdf_page_images:
-                                    st.image(
-                                        st.session_state.pdf_page_images[page_num],
-                                        caption=f"頁面 {page_num}",
-                                        use_column_width=True
-                                    )
-                            except:
-                                pass
-                    
-                    st.markdown("---")
-            else:
-                st.info("沒有表格比對結果")
-
-# 主函數
-def main():
-    # 加載CSS
-    load_css()
-    
-    # 初始化會話狀態
-    init_session_state()
-    
-    # 側邊欄設置
-    sidebar_settings()
-    
-    # 文件上傳區域
-    file_upload_section()
-    
-    # 顯示比對結果
-    display_comparison_results()
-
-if __name__ == "__main__":
-    main()
+                                st.warning(f"頁碼 {detail['matched_page']} 超出範圍")
+                    except Exception as e:
+                            st.error(f"無法顯示PDF頁面: {e}")
+    else:
+            st.warning("未比對到有效段落，請檢查文件內容是否正確。")
