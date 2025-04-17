@@ -598,3 +598,70 @@ def compare_documents(doc1_data, doc2_data, ignore_options=None, comparison_mode
 
     return matches
 
+
+# -------------------- 開始比對按鈕與結果展示 --------------------
+st.markdown("---")
+if st.button("🚀 開始比對", use_container_width=True):
+    if not word_file and not use_example_files:
+        st.error("請先上傳 Word 文件，或勾選使用示例文件。")
+    elif not pdf_file and not use_example_files:
+        st.error("請先上傳 PDF 文件，或勾選使用示例文件。")
+    else:
+        if use_example_files:
+            # 從 example 資料夾讀入內建範例
+            sample_dir = Path(__file__).parent / "examples"
+            word_path = sample_dir / "sample.docx"
+            pdf_path = sample_dir / "sample.pdf"
+            if not word_path.exists() or not pdf_path.exists():
+                st.error("找不到示例文件，請確認 examples 目錄存在 sample.docx / sample.pdf")
+                st.stop()
+            word_data = extract_text_from_word(str(word_path))
+            pdf_data = extract_text_from_pdf(str(pdf_path))
+        else:
+            word_data = extract_text_from_word(word_file)
+            pdf_data = extract_text_from_pdf(pdf_file)
+
+        st.info("正在執行比對，請稍候...")
+        matches = compare_documents(
+            word_data, pdf_data,
+            ignore_options={
+                "ignore_whitespace": st.session_state.ignore_whitespace,
+                "ignore_punctuation": st.session_state.ignore_punctuation,
+                "ignore_case": st.session_state.ignore_case,
+                "ignore_linebreaks": st.session_state.ignore_linebreaks,
+            },
+            comparison_mode=st.session_state.comparison_mode,
+            similarity_threshold=st.session_state.similarity_threshold,
+            ai_instance=None
+        )
+        if not matches:
+            st.warning("未找到任何高於相似度閾值的匹配段落。")
+        else:
+            st.success(f"比對完成，共找到 {len(matches)} 組匹配！")
+
+            # 統計與摘要
+            total_paragraphs = len(word_data["paragraphs"])
+            matched = len(matches)
+            unmatched = total_paragraphs - matched
+            match_rate = matched / total_paragraphs * 100 if total_paragraphs else 0.0
+
+            st.subheader("📊 比對結果摘要")
+            col_a, col_b, col_c = st.columns(3)
+            col_a.metric("Word段落總數", total_paragraphs)
+            col_b.metric("匹配段落數", matched)
+            col_c.metric("匹配率", f"{match_rate:.1f}%")
+
+            # 詳細表格
+            st.subheader("📄 詳細匹配結果")
+            import pandas as pd
+            df = pd.DataFrame(matches)
+            df_display = df[["doc1_index","doc2_index","similarity","page_number"]]
+            st.dataframe(df_display, use_container_width=True)
+
+            # 可展開查看差異
+            for m in matches:
+                with st.expander(f"段落 {m['doc1_index']} ↔ PDF段落 {m['doc2_index']} (相似度 {m['similarity']:.2f})"):
+                    st.markdown(f"**Word：** {m['doc1_text']}", unsafe_allow_html=True)
+                    st.markdown(f"**PDF：** {m['doc2_text']}", unsafe_allow_html=True)
+                    st.markdown("**差異：**", unsafe_allow_html=True)
+                    st.markdown(m["diff_html"], unsafe_allow_html=True)
