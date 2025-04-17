@@ -397,35 +397,45 @@ def extract_text_from_word(word_file):
         "tables": tables
     }
 
-def extract_text_from_pdf(pdf_file):
-    """從PDF文件中提取文本（使用PyMuPDF）"""
-    doc = fitz.open(pdf_file)
-    
+def extract_text_from_pdf(pdf_source):
+    """從PDF文件或Bytes中提取文本（使用PyMuPDF）"""
+    # 判斷輸入類型：路徑字串 或 Streamlit UploadedFile / Bytes
+    if isinstance(pdf_source, (str, Path)):
+        doc = fitz.open(str(pdf_source))
+    else:
+        # 讀取 bytes
+        data = pdf_source.read()
+        # 之後還要給其他函式使用，重置指標
+        if hasattr(pdf_source, "seek"):
+            pdf_source.seek(0)
+        doc = fitz.open(stream=data, filetype="pdf")
+
     paragraphs = []
     page_texts = []
-    
+
     for page_num in range(len(doc)):
         page = doc[page_num]
         text = page.get_text()
         page_texts.append(text)
-        
-        # 簡單地按行分割文本
-        lines = text.split('\n')
-        for i, line in enumerate(lines):
-            line = line.strip()
-            if line:
+
+        # 以兩個換行分段
+        for para in text.split('\n\n'):
+            para = para.strip()
+            if para:
                 paragraphs.append({
                     "index": len(paragraphs),
-                    "content": line,
+                    "content": para,
                     "type": "paragraph",
                     "page": page_num + 1
                 })
-    
+
+    doc.close()
     return {
         "paragraphs": paragraphs,
-        "tables": [],  # 簡化版本不提取表格
+        "tables": [],
         "page_texts": page_texts
     }
+
 
 def enhanced_pdf_extraction(word_path, pdf_path):
     """增強版的文檔提取函數"""
