@@ -721,12 +721,32 @@ if st.button("開始比對"):
         # 2. 進行文字抽取
         word_data, pdf_data = enhanced_pdf_extraction(word_path, pdf_path)
 
-        # 3. 建立 AI 模型（如啟用）
-        ai_instance = None
-        if st.session_state.use_ai and st.session_state.ai_key:
-            ai_instance = CustomAI(api_key=st.session_state.ai_key, model_name="Qwen")
+        
+# 3. 建立 AI / OCR 物件
+ai_instance = None
+prov = st.session_state.ai_provider
+if st.session_state.use_ai:
+    if prov.endswith("_builtin"):
+        ai_instance = CustomAI(api_key=None, model_name=prov.replace("_builtin",""))
+    else:
+        ai_instance = CustomAI(api_key=st.session_state.ai_api_key,
+                               model_name=prov)
 
-        # 4. 執行比對演算法
+# OCR instance（目前僅傳遞給進階抽取函式，可視需求擴充）
+ocr_instance = None
+if st.session_state.use_ocr:
+    eng = st.session_state.ocr_engine
+    if eng == "qwen_builtin":
+        ocr_instance = QwenOCR(api_key=None)
+    elif eng == "ocr_custom":
+        ocr_instance = QwenOCR(api_key=st.session_state.ocr_api_key)
+    elif eng == "easyocr" and EASYOCR_AVAILABLE:
+        import easyocr
+        ocr_instance = easyocr.Reader(['ch_sim','en'])
+    elif eng == "tesseract" and PYTESSERACT_AVAILABLE:
+        import pytesseract
+        ocr_instance = pytesseract
+# 4. 執行比對演算法
         ignore_options = {
             "ignore_whitespace": st.session_state.ignore_whitespace,
             "ignore_punctuation": st.session_state.ignore_punctuation,
