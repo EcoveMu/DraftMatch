@@ -22,3 +22,7 @@ requests==2.31.0
 # 語意比對與 AI 模型
 sentence-transformers==2.2.2  # 使用語意嵌入模型
 huggingface_hub>=0.11.1       # 支援 SentenceTransformer 下載模型
+
+
+torch==2.1.0+cpu           # CPU 版就夠，用不到 GPU
+transformers>=4.40.0       # (可選) 若想明確指定 transformers 版本

@@ -1,5 +1,6 @@
 import difflib
 import re
+import html
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
@@ -85,3 +86,65 @@ def compare_documents(doc1, doc2, ignore_options=None, comparison_mode='hybrid',
             })
 
     return results
+def format_diff_html(a: str, b: str) -> str:
+    """
+    把兩段文字做字元級 diff，回傳帶 <span> 標記的 HTML。
+    app.py 會用 .diff-removed / .diff-added 這兩個 class 去上色。
+    """
+    pieces = []
+    for d in difflib.ndiff(a, b):
+        tag, ch = d[0], html.escape(d[2:])
+        if tag == "-":
+            pieces.append(f'<span class="diff-removed">{ch}</span>')
+        elif tag == "+":
+            pieces.append(f'<span class="diff-added">{ch}</span>')
+        else:     # ' ' 代表相同
+            pieces.append(ch)
+    return "".join(pieces)
+
+def generate_comparison_report(results,
+                               diff_display_mode="字符級別",
+                               show_all_content=False,
+                               similarity_cutoff: float = 0.8):
+    """
+    把 compare_documents() 的結果轉成 app.py 期望的 dict 結構：
+    {
+        "summary": {...},
+        "paragraph_details": [...],
+        # 這裡暫不處理表格，需要時再擴充
+    }
+    """
+    total = len(results)
+    similar = sum(1 for r in results if r["similarity"] >= similarity_cutoff)
+    different = total - similar
+
+    summary = {
+        "total_paragraphs": total,
+        "similar_paragraphs": similar,
+        "different_paragraphs": different,
+        "total_tables": 0,
+        "similar_tables": 0,
+        "different_tables": 0,
+        "paragraph_similarity_percentage": (similar / total * 100) if total else 0,
+        "table_similarity_percentage": 0,
+    }
+
+    paragraph_details = []
+    for r in results:
+        diff_html = format_diff_html(r["doc1_text"], r["doc2_text"])
+        paragraph_details.append({
+            "original_index": r["doc1_index"],
+            "matched_page": r["doc2_index"],        # 目前只放索引，若要頁碼請自行再對應
+            "matched_text": r["doc2_text"],
+            "original_text": r["doc1_text"],
+            "exact_similarity": r["similarity"],
+            "is_similar": r["similarity"] >= similarity_cutoff,
+            "diff_html": diff_html
+        })
+
+    report = {
+        "summary": summary,
+        "paragraph_details": paragraph_details,
+        # 若未做表格比對，可不放 "table_details"
+    }
+    return report
