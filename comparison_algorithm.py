@@ -1,7 +1,15 @@
 import difflib
 import re
 import numpy as np
-from sentence_transformers import SentenceTransformer
+
+# 嘗試載入 SentenceTransformer；若失敗則降級為基於 difflib 的相似度
+try:
+    from sentence_transformers import SentenceTransformer
+    _st_model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+    SENTENCE_MODEL_AVAILABLE = True
+except Exception as _e:
+    SENTENCE_MODEL_AVAILABLE = False
+    _st_model = None
 
 def exact_matching(text1, text2, ignore_space=True, ignore_punctuation=True, ignore_case=True):
     if ignore_space:
@@ -19,11 +27,14 @@ def exact_matching(text1, text2, ignore_space=True, ignore_punctuation=True, ign
     return similarity, diff
 
 def semantic_matching(text1, text2):
-    model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
-    embedding1 = model.encode(text1)
-    embedding2 = model.encode(text2)
-    similarity = np.dot(embedding1, embedding2) / (np.linalg.norm(embedding1) * np.linalg.norm(embedding2))
-    return similarity
+    """語意比對；若無 sentence-transformers 則回退到 difflib 比對"""
+    if SENTENCE_MODEL_AVAILABLE and _st_model is not None:
+        emb1 = _st_model.encode(text1)
+        emb2 = _st_model.encode(text2)
+        similarity = np.dot(emb1, emb2) / (np.linalg.norm(emb1) * np.linalg.norm(emb2))
+        return float(similarity)
+    # 回退
+    return difflib.SequenceMatcher(None, text1, text2).ratio()
 
 def hybrid_matching(text1, text2, exact_threshold=0.8, semantic_threshold=0.8):
     exact_similarity, diff = exact_matching(text1, text2)
@@ -33,6 +44,7 @@ def hybrid_matching(text1, text2, exact_threshold=0.8, semantic_threshold=0.8):
     is_similar = semantic_similarity >= semantic_threshold
     return is_similar, exact_similarity, semantic_similarity, diff
 
+# compare_documents kept for backward compatibility if imported elsewhere
 def compare_documents(doc1, doc2, ignore_options=None, comparison_mode='hybrid', similarity_threshold=0.6, ai_instance=None):
     if ignore_options is None:
         ignore_options = {}
