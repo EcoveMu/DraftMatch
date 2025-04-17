@@ -9,7 +9,7 @@ import io
 from PIL import Image, ImageDraw
 import fitz  # PyMuPDF
 from text_extraction import extract_and_process_documents
-from improved_comparison_algorithm import compare_documents, generate_comparison_report, format_diff_html, format_table_diff_html
+from comparison_algorithm import compare_documents, generate_comparison_report, format_diff_html, format_table_diff_html
 from improved_generative_ai import QwenAI
 from improved_qwen_ocr import QwenOCR
 
