@@ -1,28 +1,11 @@
-# 核心框架
-streamlit==1.32.0
-
-# 文件處理
-pymupdf==1.23.8               # fitz 模組，處理 PDF
-python-docx==1.1.0            # 處理 Word 文件（.docx）
-pillow==10.2.0                # 圖片處理
-pdfplumber==0.10.3            # PDF 文字/表格擷取
-tabula-py==2.9.0              # Java-based 表格擷取，需安裝 Java
-
-# 資料處理
-pandas==2.1.4
+streamlit==1.31.0
+python-docx==0.8.11
+PyMuPDF==1.23.8
+Pillow==10.1.0
 numpy==1.26.3
-
-# OCR 模組
-easyocr==1.7.1                # GPU 可加速（需安裝 torch）
-pytesseract==0.3.10           # 使用 Tesseract OCR
-
-# 網路與 API 請求
+pandas==2.1.4
+python-Levenshtein==0.23.0
+nltk==3.8.1
+scikit-learn==1.3.2
+matplotlib==3.8.2
 requests==2.31.0
-
-# 語意比對與 AI 模型
-sentence-transformers>=2.3.0  # 使用語意嵌入模型
-huggingface_hub<0.20        # 支援 SentenceTransformer 下載模型
-
-
-torch==2.1.0+cpu           # CPU 版就夠，用不到 GPU
-transformers>=4.40.0       # (可選) 若想明確指定 transformers 版本

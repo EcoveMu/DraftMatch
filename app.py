@@ -8,10 +8,242 @@ import json
 import io
 from PIL import Image, ImageDraw
 import fitz  # PyMuPDF
+import re
+import difflib
+
+# 導入本地模組
 from text_extraction import extract_and_process_documents
-from comparison_algorithm import compare_documents, generate_comparison_report, format_diff_html
-from generative_ai import QwenAI
-from qwen_ocr import QwenOCR
+
+# 簡化版的比對算法，不依賴sentence-transformers
+def exact_matching(text1, text2, ignore_space=True, ignore_punctuation=True, ignore_case=True):
+    """精確比對兩段文本的相似度"""
+    if ignore_space:
+        text1 = re.sub(r'\s+', ' ', text1)
+        text2 = re.sub(r'\s+', ' ', text2)
+    if ignore_punctuation:
+        text1 = re.sub(r'[.,;:!?，。；：！？]', '', text1)
+        text2 = re.sub(r'[.,;:!?，。；：！？]', '', text2)
+    if ignore_case:
+        text1 = text1.lower()
+        text2 = text2.lower()
+    matcher = difflib.SequenceMatcher(None, text1, text2)
+    similarity = matcher.ratio()
+    diff = list(difflib.ndiff(text1.splitlines(), text2.splitlines()))
+    return similarity, diff
+
+def compare_documents(doc1, doc2, ignore_options=None, comparison_mode='exact', similarity_threshold=0.6, ai_instance=None):
+    """比對兩個文檔的內容"""
+    if ignore_options is None:
+        ignore_options = {}
+    
+    # 初始化結果
+    paragraph_results = []
+    table_results = []
+    
+    # 比對段落
+    for i, para1 in enumerate(doc1["paragraphs"]):
+        best_match = None
+        best_similarity = 0
+        best_index = -1
+        best_page = "未找到"
+        
+        for j, para2 in enumerate(doc2["paragraphs"]):
+            # 使用精確比對
+            sim, diff = exact_matching(
+                para1['content'], para2['content'],
+                ignore_space=ignore_options.get("ignore_space", True),
+                ignore_punctuation=ignore_options.get("ignore_punctuation", True),
+                ignore_case=ignore_options.get("ignore_case", True),
+            )
+            
+            if sim > best_similarity:
+                best_similarity = sim
+                best_match = para2
+                best_index = j
+                best_page = para2.get("page", "未找到")
+        
+        # 判斷是否相似
+        is_similar = best_similarity >= similarity_threshold
+        
+        # 添加結果
+        paragraph_results.append({
+            "original_index": i,
+            "original_text": para1["content"],
+            "matched_index": best_index,
+            "matched_text": best_match["content"] if best_match else "",
+            "matched_page": best_page,
+            "exact_similarity": best_similarity,
+            "is_similar": is_similar
+        })
+    
+    # 比對表格
+    for i, table1 in enumerate(doc1.get("tables", [])):
+        best_match = None
+        best_similarity = 0
+        best_index = -1
+        best_page = "未找到"
+        
+        for j, table2 in enumerate(doc2.get("tables", [])):
+            # 計算表格相似度
+            table_similarity = calculate_table_similarity(table1["content"], table2["content"])
+            
+            if table_similarity > best_similarity:
+                best_similarity = table_similarity
+                best_match = table2
+                best_index = j
+                best_page = table2.get("page", "未找到")
+        
+        # 判斷是否相似
+        is_similar = best_similarity >= similarity_threshold
+        
+        # 添加結果
+        table_results.append({
+            "original_index": i,
+            "original_table": table1["content"],
+            "matched_index": best_index,
+            "matched_table": best_match["content"] if best_match else None,
+            "matched_page": best_page,
+            "similarity": best_similarity,
+            "is_similar": is_similar
+        })
+    
+    # 計算統計信息
+    statistics = {
+        "total_paragraphs": len(paragraph_results),
+        "similar_paragraphs": sum(1 for r in paragraph_results if r["is_similar"]),
+        "different_paragraphs": sum(1 for r in paragraph_results if not r["is_similar"]),
+        "total_tables": len(table_results),
+        "similar_tables": sum(1 for r in table_results if r["is_similar"]),
+        "different_tables": sum(1 for r in table_results if not r["is_similar"])
+    }
+    
+    return {
+        "paragraph_results": paragraph_results,
+        "table_results": table_results,
+        "statistics": statistics
+    }
+
+def calculate_table_similarity(table1, table2):
+    """計算兩個表格的相似度"""
+    # 如果表格為空，返回0
+    if not table1 or not table2:
+        return 0
+    
+    # 將表格轉換為文本
+    text1 = "\n".join([" ".join(row) for row in table1])
+    text2 = "\n".join([" ".join(row) for row in table2])
+    
+    # 使用精確比對
+    similarity, _ = exact_matching(text1, text2)
+    
+    return similarity
+
+def format_diff_html(diff, mode="字符級別"):
+    """將差異格式化為HTML"""
+    if not diff:
+        return ""
+    
+    if mode == "字符級別":
+        # 字符級別差異
+        result = []
+        for line in diff:
+            if line.startswith('- '):
+                result.append(f'<span class="diff-char-removed">{line[2:]}</span>')
+            elif line.startswith('+ '):
+                result.append(f'<span class="diff-char-added">{line[2:]}</span>')
+            elif line.startswith('  '):
+                result.append(line[2:])
+        return "".join(result)
+    
+    elif mode == "詞語級別":
+        # 詞語級別差異
+        result = []
+        for line in diff:
+            if line.startswith('- '):
+                result.append(f'<span class="diff-removed">{line[2:]}</span><br>')
+            elif line.startswith('+ '):
+                result.append(f'<span class="diff-added">{line[2:]}</span><br>')
+            elif line.startswith('  '):
+                result.append(f'{line[2:]}<br>')
+        return "".join(result)
+    
+    else:  # 行級別
+        # 行級別差異
+        result = []
+        for line in diff:
+            if line.startswith('- '):
+                result.append(f'<div class="diff-removed">{line[2:]}</div>')
+            elif line.startswith('+ '):
+                result.append(f'<div class="diff-added">{line[2:]}</div>')
+            elif line.startswith('  '):
+                result.append(f'<div>{line[2:]}</div>')
+        return "".join(result)
+
+def generate_comparison_report(comparison_results, diff_display_mode="字符級別", show_all_content=False):
+    """生成比對報告"""
+    # 處理段落比對結果
+    paragraph_details = []
+    for result in comparison_results["paragraph_results"]:
+        # 生成差異HTML
+        diff_html = ""
+        if result["matched_text"]:
+            # 使用精確比對
+            _, diff = exact_matching(result["original_text"], result["matched_text"])
+            diff_html = format_diff_html(diff, diff_display_mode)
+        
+        # 添加詳細信息
+        paragraph_details.append({
+            "original_index": result["original_index"],
+            "original_text": result["original_text"],
+            "matched_text": result["matched_text"],
+            "matched_page": result["matched_page"],
+            "exact_similarity": result["exact_similarity"],
+            "is_similar": result["is_similar"],
+            "diff_html": diff_html
+        })
+    
+    # 處理表格比對結果
+    table_details = []
+    for result in comparison_results["table_results"]:
+        table_details.append({
+            "original_index": result["original_index"],
+            "original_table": result["original_table"],
+            "matched_table": result["matched_table"],
+            "matched_page": result["matched_page"],
+            "similarity": result["similarity"],
+            "is_similar": result["is_similar"]
+        })
+    
+    # 計算摘要信息
+    total_paragraphs = comparison_results["statistics"]["total_paragraphs"]
+    similar_paragraphs = comparison_results["statistics"]["similar_paragraphs"]
+    different_paragraphs = comparison_results["statistics"]["different_paragraphs"]
+    
+    total_tables = comparison_results["statistics"]["total_tables"]
+    similar_tables = comparison_results["statistics"]["similar_tables"]
+    different_tables = comparison_results["statistics"]["different_tables"]
+    
+    # 計算相似度百分比
+    paragraph_similarity_percentage = (similar_paragraphs / total_paragraphs * 100) if total_paragraphs > 0 else 100
+    table_similarity_percentage = (similar_tables / total_tables * 100) if total_tables > 0 else 100
+    
+    # 生成摘要
+    summary = {
+        "total_paragraphs": total_paragraphs,
+        "similar_paragraphs": similar_paragraphs,
+        "different_paragraphs": different_paragraphs,
+        "paragraph_similarity_percentage": paragraph_similarity_percentage,
+        "total_tables": total_tables,
+        "similar_tables": similar_tables,
+        "different_tables": different_tables,
+        "table_similarity_percentage": table_similarity_percentage
+    }
+    
+    return {
+        "summary": summary,
+        "paragraph_details": paragraph_details,
+        "table_details": table_details
+    }
 
 # 設置頁面配置
 st.set_page_config(
@@ -226,7 +458,7 @@ def init_session_state():
     if 'diff_display_mode' not in st.session_state:
         st.session_state.diff_display_mode = "字符級別"
     if 'comparison_mode' not in st.session_state:
-        st.session_state.comparison_mode = "混合比對"
+        st.session_state.comparison_mode = "精確比對"
     if 'similarity_threshold' not in st.session_state:
         st.session_state.similarity_threshold = 0.8
     if 'ignore_options' not in st.session_state:
@@ -237,19 +469,7 @@ def init_session_state():
             "ignore_newline": True
         }
     if 'use_ocr' not in st.session_state:
-        st.session_state.use_ocr = True
-    if 'ocr_engine' not in st.session_state:
-        st.session_state.ocr_engine = "Qwen"  # 默認使用Qwen
-    if 'use_ai' not in st.session_state:
-        st.session_state.use_ai = True  # 默認啟用AI
-    if 'ai_api_key' not in st.session_state:
-        st.session_state.ai_api_key = ""
-    if 'ocr_api_key' not in st.session_state:
-        st.session_state.ocr_api_key = ""
-    if 'custom_ocr_api' not in st.session_state:
-        st.session_state.custom_ocr_api = False
-    if 'custom_ai_api' not in st.session_state:
-        st.session_state.custom_ai_api = False
+        st.session_state.use_ocr = False
     if 'pdf_page_images' not in st.session_state:
         st.session_state.pdf_page_images = {}
     if 'highlighted_images' not in st.session_state:
@@ -272,8 +492,8 @@ def sidebar_settings():
         st.subheader("比對設置")
         st.session_state.comparison_mode = st.selectbox(
             "比對模式",
-            ["精確比對", "語意比對", "混合比對"],
-            index=2
+            ["精確比對"],
+            index=0
         )
         
         st.session_state.similarity_threshold = st.slider(
@@ -293,42 +513,7 @@ def sidebar_settings():
         
         # OCR設置
         st.subheader("OCR設置")
-        st.session_state.use_ocr = st.checkbox("使用OCR提取PDF文本", value=True)
-        
-        if st.session_state.use_ocr:
-            st.session_state.ocr_engine = st.selectbox(
-                "OCR引擎",
-                ["Qwen (免費)", "Qwen (API)", "自定義API"],
-                index=0
-            )
-            
-            if st.session_state.ocr_engine == "Qwen (API)" or st.session_state.ocr_engine == "自定義API":
-                st.session_state.ocr_api_key = st.text_input("OCR API密鑰", type="password", value=st.session_state.ocr_api_key)
-                
-                if st.session_state.ocr_engine == "自定義API":
-                    st.session_state.custom_ocr_api = st.text_input("自定義OCR API URL", value=st.session_state.custom_ocr_api if st.session_state.custom_ocr_api else "")
-        
-        # AI設置
-        st.subheader("生成式AI設置")
-        st.session_state.use_ai = st.checkbox("使用生成式AI增強功能", value=True)
-        
-        if st.session_state.use_ai:
-            ai_model = st.selectbox(
-                "AI模型",
-                ["Qwen (免費)", "Qwen (API)", "自定義API"],
-                index=0
-            )
-            
-            if ai_model == "Qwen (API)":
-                st.session_state.custom_ai_api = False
-                st.session_state.ai_api_key = st.text_input("AI API密鑰", type="password", value=st.session_state.ai_api_key)
-            elif ai_model == "自定義API":
-                st.session_state.custom_ai_api = True
-                st.session_state.ai_api_key = st.text_input("AI API密鑰", type="password", value=st.session_state.ai_api_key)
-                st.session_state.ai_api_url = st.text_input("AI API URL", value=st.session_state.ai_api_url if 'ai_api_url' in st.session_state else "")
-            else:
-                st.session_state.custom_ai_api = False
-                st.session_state.ai_api_key = ""
+        st.session_state.use_ocr = st.checkbox("使用OCR提取PDF文本", value=False)
         
         # 顯示設置
         st.subheader("顯示設置")
@@ -366,53 +551,24 @@ def file_upload_section():
     
     # 使用示例文件
     if st.session_state.use_example_files:
-        word_file_path = "比對素材-原稿.docx"
-        pdf_file_path = "比對素材-美編後完稿.pdf"
-        
-        # 檢查文件是否存在
-        if os.path.exists(word_file_path) and os.path.exists(pdf_file_path):
-            st.success(f"使用示例文件: {word_file_path} 和 {pdf_file_path}")
-            word_file = open(word_file_path, "rb")
-            pdf_file = open(pdf_file_path, "rb")
-        else:
-            st.error("示例文件不存在，請上傳自己的文件或取消勾選「使用示例文件進行演示」選項。")
-            word_file = None
-            pdf_file = None
+        st.warning("示例文件功能需要上傳您自己的文件。請取消勾選「使用示例文件進行演示」選項，然後上傳您的文件。")
+        word_file = None
+        pdf_file = None
     
-    if (word_file and pdf_file) or st.session_state.use_example_files:
+    if word_file and pdf_file:
         if st.button("開始比對", key="start_comparison"):
             with st.spinner("正在提取文件內容並進行比對..."):
-                # 初始化OCR引擎
-                ocr = None
-                if st.session_state.use_ocr:
-                    if st.session_state.ocr_engine == "Qwen (API)":
-                        ocr = QwenOCR(st.session_state.ocr_api_key)
-                    elif st.session_state.ocr_engine == "自定義API":
-                        ocr = QwenOCR(st.session_state.ocr_api_key, st.session_state.custom_ocr_api)
-                    else:  # Qwen (免費)
-                        ocr = QwenOCR()  # 無需API key
-                
                 # 提取文件內容
                 word_data, pdf_data = extract_and_process_documents(
                     word_file, 
                     pdf_file, 
                     st.session_state.use_ocr, 
-                    st.session_state.ocr_engine,
-                    ocr
+                    "None",
+                    None
                 )
                 
                 st.session_state.word_data = word_data
                 st.session_state.pdf_data = pdf_data
-                
-                # 初始化AI
-                ai = None
-                if st.session_state.use_ai:
-                    if st.session_state.custom_ai_api:
-                        ai = QwenAI(st.session_state.ai_api_key, st.session_state.ai_api_url)
-                    elif st.session_state.ocr_engine == "Qwen (API)":
-                        ai = QwenAI(st.session_state.ai_api_key)
-                    else:
-                        ai = QwenAI()  # 無需API key
                 
                 # 進行比對
                 comparison_results = compare_documents(
@@ -421,7 +577,7 @@ def file_upload_section():
                     st.session_state.ignore_options,
                     st.session_state.comparison_mode,
                     st.session_state.similarity_threshold,
-                    ai
+                    None
                 )
                 
                 st.session_state.comparison_results = comparison_results
@@ -434,26 +590,6 @@ def file_upload_section():
                 )
                 
                 st.session_state.comparison_report = comparison_report
-                
-                # 使用AI分析比對結果
-                if st.session_state.use_ai and ai and ai.is_available():
-                    with st.spinner("正在使用AI分析比對結果..."):
-                        # 獲取原始文本和編輯後文本的樣本
-                        original_sample = "\n".join([p['content'] for p in word_data['paragraphs'][:5]])
-                        edited_sample = "\n".join([p['content'] for p in pdf_data['paragraphs'][:5] if 'content' in p])
-                        
-                        # 分析比對結果
-                        ai_analysis = ai.analyze_comparison_results(
-                            original_sample,
-                            edited_sample,
-                            comparison_results
-                        )
-                        
-                        st.session_state.ai_analysis = ai_analysis
-                        
-                        # 生成摘要報告
-                        ai_summary_report = ai.generate_summary_report(comparison_results)
-                        st.session_state.ai_summary_report = ai_summary_report
                 
                 # 提取PDF頁面圖像
                 with st.spinner("正在提取PDF頁面圖像..."):
@@ -489,40 +625,6 @@ def file_upload_section():
                     
                     # 關閉PDF文件
                     pdf_doc.close()
-                    
-                    # 如果使用OCR，為不同的段落標記位置
-                    if st.session_state.use_ocr and ocr and ocr.is_available():
-                        with st.spinner("正在標記PDF中的差異位置..."):
-                            # 為每個不同的段落標記位置
-                            for result in comparison_results["paragraph_results"]:
-                                if not result["is_similar"] and result["matched_page"] != "未找到":
-                                    try:
-                                        page_num = int(result["matched_page"])
-                                        
-                                        # 獲取頁面圖像路徑
-                                        img_path = os.path.join(temp_dir, f"page_{page_num}.png")
-                                        
-                                        # 標記文本位置
-                                        highlighted_img_path = ocr.highlight_text_in_image(
-                                            img_path,
-                                            result["matched_text"],
-                                            os.path.join(temp_dir, f"highlighted_page_{page_num}_{result['original_index']}.png")
-                                        )
-                                        
-                                        if highlighted_img_path:
-                                            # 讀取標記後的圖像
-                                            highlighted_img = Image.open(highlighted_img_path)
-                                            
-                                            # 將圖像轉換為bytes
-                                            highlighted_img_byte_arr = io.BytesIO()
-                                            highlighted_img.save(highlighted_img_byte_arr, format='PNG')
-                                            highlighted_img_byte_arr = highlighted_img_byte_arr.getvalue()
-                                            
-                                            # 保存到session_state
-                                            key = f"{page_num}_{result['original_index']}"
-                                            st.session_state.highlighted_images[key] = highlighted_img_byte_arr
-                                    except Exception as e:
-                                        st.warning(f"標記差異位置時出錯: {str(e)}")
                 
                 st.session_state.processing_complete = True
 
@@ -580,16 +682,6 @@ def display_comparison_results():
                 st.markdown(f"總表格數: {st.session_state.comparison_report['summary']['total_tables']}")
                 st.markdown(f"相似表格數: {st.session_state.comparison_report['summary']['similar_tables']}")
                 st.markdown(f"不同表格數: {st.session_state.comparison_report['summary']['different_tables']}")
-        
-        # 顯示AI分析結果
-        if st.session_state.use_ai and st.session_state.ai_analysis:
-            with st.expander("AI分析", expanded=True):
-                st.markdown(st.session_state.ai_analysis)
-        
-        # 顯示AI摘要報告
-        if st.session_state.use_ai and st.session_state.ai_summary_report:
-            with st.expander("AI摘要報告", expanded=False):
-                st.markdown(st.session_state.ai_summary_report)
         
         # 創建標籤頁
         tab1, tab2 = st.tabs(["段落比對結果", "表格比對結果"])
@@ -683,23 +775,48 @@ def display_comparison_results():
                             st.markdown(f"**表格 {detail['original_index'] + 1}**")
                             st.markdown(f"相似度: {detail['similarity']:.2f}")
                             st.markdown(f"頁碼: {detail['matched_page']}")
-                    try:    
-                        with col2:
-                            # 顯示原始表格和匹配表格
-                            st.markdown("**原始表格:**")
-                            if detail["original_table"]:
-                                df1 = pd.DataFrame(detail["original_table"])
-                                st.dataframe(df1)
-                            else:
-                                st.markdown("無表格數據")
-                            
-                            st.markdown("**美編後表格:**")
-                            if detail["matched_table"]:
-                                df2 = pd.DataFrame(detail["matched_table"])
-                                st.dataframe(df2)
-                            else:
-                                st.warning(f"頁碼 {detail['matched_page']} 超出範圍")
-                    except Exception as e:
-                            st.error(f"無法顯示PDF頁面: {e}")
+                        try:    
+                            with col2:
+                                # 顯示原始表格和匹配表格
+                                st.markdown("**原始表格:**")
+                                if detail["original_table"]:
+                                    df1 = pd.DataFrame(detail["original_table"])
+                                    st.dataframe(df1)
+                                else:
+                                    st.markdown("無表格數據")
+                                
+                                st.markdown("**美編後表格:**")
+                                if detail["matched_table"]:
+                                    df2 = pd.DataFrame(detail["matched_table"])
+                                    st.dataframe(df2)
+                                else:
+                                    st.warning(f"頁碼 {detail['matched_page']} 超出範圍")
+                        except Exception as e:
+                                st.error(f"無法顯示表格: {e}")
+            else:
+                st.warning("未比對到有效表格，請檢查文件內容是否包含表格。")
     else:
+        if not st.session_state.processing_complete:
+            st.info("請上傳文件並點擊「開始比對」按鈕。")
+        else:
             st.warning("未比對到有效段落，請檢查文件內容是否正確。")
+
+# 主函數
+def main():
+    # 加載CSS
+    load_css()
+    
+    # 初始化會話狀態
+    init_session_state()
+    
+    # 側邊欄設置
+    sidebar_settings()
+    
+    # 文件上傳區域
+    file_upload_section()
+    
+    # 顯示比對結果
+    display_comparison_results()
+
+if __name__ == "__main__":
+    main()
