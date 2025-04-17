@@ -225,107 +225,110 @@ st.markdown("""
 st.markdown('<h1 class="main-header">期刊比對系統</h1>', unsafe_allow_html=True)
 st.markdown('本系統用於比對原始Word文件與美編後PDF文件的內容差異，幫助校對人員快速找出不一致之處。')
 
-# 初始化會話狀態
-if 'comparison_mode' not in st.session_state:
-    st.session_state.comparison_mode = "hybrid"
-if 'similarity_threshold' not in st.session_state:
-    st.session_state.similarity_threshold = 0.6
-if 'use_ocr' not in st.session_state:
-    st.session_state.use_ocr = False
-if 'ocr_engine' not in st.session_state:
-    st.session_state.ocr_engine = "Qwen"
-if 'use_ai' not in st.session_state:
-    st.session_state.use_ai = False
-if 'ai_key' not in st.session_state:
-    st.session_state.ai_key = ""
-if 'ignore_whitespace' not in st.session_state:
-    st.session_state.ignore_whitespace = True
-if 'ignore_punctuation' not in st.session_state:
-    st.session_state.ignore_punctuation = True
-if 'ignore_case' not in st.session_state:
-    st.session_state.ignore_case = True
-if 'ignore_linebreaks' not in st.session_state:
-    st.session_state.ignore_linebreaks = True
+# --- SessionState 預設值與初始化 ------------------------------------
+default_states = {
+    "comparison_mode": "hybrid",
+    "similarity_threshold": 0.6,
+    "use_ocr": False,
+    "ocr_engine": "qwen_builtin",
+    "ocr_api_key": "",
+    "use_ai": False,
+    "ai_provider": "deepseek_builtin",
+    "ai_api_key": "",
+    "ignore_whitespace": True,
+    "ignore_punctuation": True,
+    "ignore_case": True,
+    "ignore_linebreaks": True,
+}
+for k, v in default_states.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
 # Sidebar 設定
 with st.sidebar:
     st.header("⚙️ 比對設定")
 
     st.session_state.comparison_mode = st.selectbox(
-        "比對模式", 
+        "比對模式",
         ["exact", "semantic", "hybrid", "ai"],
         index=["exact", "semantic", "hybrid", "ai"].index(st.session_state.comparison_mode)
     )
-    
     st.session_state.similarity_threshold = st.slider(
-        "相似度閾值", 
-        0.0, 1.0, 
-        st.session_state.similarity_threshold, 
+        "相似度閾值",
+        0.0, 1.0,
+        st.session_state.similarity_threshold,
         0.05
     )
-    
+
     st.divider()
-    st.subheader("🔍 OCR設置")
-    
-    st.session_state.use_ocr = st.checkbox(
-        "啟用 OCR", 
-        value=st.session_state.use_ocr
-    )
-    
+    st.subheader("🔍 OCR 設定")
+    st.session_state.use_ocr = st.checkbox("啟用 OCR", value=st.session_state.use_ocr)
+
     if st.session_state.use_ocr:
-        st.session_state.ocr_engine = st.radio(
-            "OCR引擎",
-            ["Qwen", "EasyOCR", "Tesseract", "自定義API"],
-            index=["Qwen", "EasyOCR", "Tesseract", "自定義API"].index(st.session_state.ocr_engine)
+        ocr_choice = st.radio(
+            "OCR 引擎",
+            ["Qwen (內建)", "EasyOCR", "Tesseract", "自定義 OCR API"],
+            index=["qwen_builtin", "easyocr", "tesseract", "ocr_custom"]
+            .index(st.session_state.ocr_engine)
         )
-        
-        if st.session_state.ocr_engine == "Qwen" or st.session_state.ocr_engine == "自定義API":
-            st.session_state.ai_key = st.text_input(
-                "🔑 請輸入 OCR API 金鑰", 
+        st.session_state.ocr_engine = {
+            "Qwen (內建)": "qwen_builtin",
+            "EasyOCR": "easyocr",
+            "Tesseract": "tesseract",
+            "自定義 OCR API": "ocr_custom",
+        }[ocr_choice]
+
+        if st.session_state.ocr_engine == "ocr_custom":
+            st.session_state.ocr_api_key = st.text_input(
+                "🔑 請輸入 OCR API 金鑰",
                 type="password",
-                value=st.session_state.ai_key
+                value=st.session_state.ocr_api_key
             )
-    
+
     st.divider()
-    st.subheader("🤖 生成式AI設置")
-    
-    st.session_state.use_ai = st.checkbox(
-        "使用生成式 AI", 
-        value=st.session_state.use_ai
-    )
-    
-    if st.session_state.use_ai and not st.session_state.ai_key:
-        st.session_state.ai_key = st.text_input(
-            "🔑 請輸入 AI API 金鑰", 
-            type="password"
+    st.subheader("🤖 生成式 AI 設定")
+    st.session_state.use_ai = st.checkbox("使用生成式 AI", value=st.session_state.use_ai)
+
+    if st.session_state.use_ai:
+        ai_choice = st.selectbox(
+            "AI 來源 / 模型",
+            ["DeepSeek (內建)", "Qwen2.5 (內建)", "Mistral‑7B (內建)",
+             "OpenAI", "Anthropic", "Qwen (API)", "自定義 AI API"],
+            index=[
+                "deepseek_builtin","qwen_builtin","mistral_builtin",
+                "openai","anthropic","qwen_api","ai_custom"
+            ].index(st.session_state.ai_provider)
         )
+        st.session_state.ai_provider = {
+            "DeepSeek (內建)": "deepseek_builtin",
+            "Qwen2.5 (內建)": "qwen_builtin",
+            "Mistral‑7B (內建)": "mistral_builtin",
+            "OpenAI": "openai",
+            "Anthropic": "anthropic",
+            "Qwen (API)": "qwen_api",
+            "自定義 AI API": "ai_custom",
+        }[ai_choice]
+
+        if st.session_state.ai_provider in {"openai","anthropic","qwen_api","ai_custom"}:
+            st.session_state.ai_api_key = st.text_input(
+                "🔑 生成式 AI API 金鑰",
+                type="password",
+                value=st.session_state.ai_api_key
+            )
 
     st.divider()
     st.subheader("🧹 忽略規則")
-    
-    st.session_state.ignore_whitespace = st.checkbox(
-        "忽略空格", 
-        value=st.session_state.ignore_whitespace
-    )
-    
-    st.session_state.ignore_punctuation = st.checkbox(
-        "忽略標點符號", 
-        value=st.session_state.ignore_punctuation
-    )
-    
-    st.session_state.ignore_case = st.checkbox(
-        "忽略大小寫", 
-        value=st.session_state.ignore_case
-    )
-    
-    st.session_state.ignore_linebreaks = st.checkbox(
-        "忽略斷行", 
-        value=st.session_state.ignore_linebreaks
-    )
+    st.session_state.ignore_whitespace = st.checkbox("忽略空格", value=st.session_state.ignore_whitespace)
+    st.session_state.ignore_punctuation = st.checkbox("忽略標點符號", value=st.session_state.ignore_punctuation)
+    st.session_state.ignore_case = st.checkbox("忽略大小寫", value=st.session_state.ignore_case)
+    st.session_state.ignore_linebreaks = st.checkbox("忽略斷行", value=st.session_state.ignore_linebreaks)
 
     st.divider()
     st.subheader("ℹ️ 系統資訊")
-    st.info("本系統用於比對原始Word文件與美編後PDF文件的內容差異，幫助校對人員快速找出不一致之處。")
+    st.info("本系統用於比對原始 Word 與 PDF 內容差異，協助校對。")
+
+# --- 向下相容舊欄位 -------------------------------------------------
+st.session_state.ai_key = st.session_state.ai_api_key
 
 # 文件上傳區域
 st.header("📁 文件上傳")

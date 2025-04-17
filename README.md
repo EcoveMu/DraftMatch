@@ -1,4 +1,15 @@
-# 期刊比對系統更新說明
+.
+├── app.py                   # Streamlit 入口點 / 前端 UI 與整體流程控制
+├── requirements.txt         # Python 依賴清單
+├── custom.css               # 自訂頁面樣式（顏色、佈局、動畫）
+├── comparison_algorithm.py  # 段落比對核心（精確 / 語意 / 混合 / AI）
+├── text_extraction.py       # 基礎 Word / PDF 文字抽取與前處理
+├── enhanced_extraction.py   # 進階抽取（pdfplumber、PyMuPDF、OCR、表格）
+├── generative_ai.py         # QwenAI 包裝：OCR、語意比對、結果分析與摘要
+├── custom_ai.py             # 通用 AI 包裝（OpenAI / Anthropic / Qwen / 免費端點）
+├── qwen_ocr.py              # 專用 Qwen OCR／表格抽取與影像標註工具
+├── qwen_api.py              # 精簡版 Qwen OCR（舊版，相容用途）
+└── README.md                # 專案說明（本檔）
 
 ## 更新內容
 
