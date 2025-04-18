@@ -126,6 +126,11 @@ def select_pdf_pages(pdf_file):
     if st.session_state.selected_pages:
         st.info(f"將比對頁面: {st.session_state.selected_pages}")
 
+    if st.button("🔄 重新選擇 PDF 頁面", key="reset_pages_before"):
+        st.session_state.selected_pages = None
+        st.experimental_rerun()
+
+
 def build_sub_pdf(uploaded, pages):
     pos=uploaded.tell(); uploaded.seek(0); data=uploaded.read(); uploaded.seek(pos)
     src=fitz.open(stream=data, filetype="pdf")
