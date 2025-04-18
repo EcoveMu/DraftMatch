@@ -40,30 +40,32 @@ for k,v in DEFAULTS.items():
 # ------------- Side Bar -----------------
 with st.sidebar:
     st.header("⚙️ 比對設定")
+
     # ---- 比對模式 ----
-mode_labels = ["混合比對（Hybrid）","精確比對（Exact）","語意比對（Semantic）","AI 比對"]
-mode_map = {
-    "混合比對（Hybrid）":"hybrid",
-    "精確比對（Exact）":"exact",
-    "語意比對（Semantic）":"semantic",
-    "AI 比對":"ai",
-}
-current_label = next(k for k,v in mode_map.items() if v == st.session_state.comparison_mode)
-selected_label = st.radio("比對模式", mode_labels, index=mode_labels.index(current_label))
-st.session_state.comparison_mode = mode_map[selected_label]
-    st.session_state.similarity_threshold = st.slider("相似度閾值",0.0,1.0, st.session_state.similarity_threshold, 0.05)
+    mode_labels = ["混合比對（Hybrid）","精確比對（Exact）","語意比對（Semantic）","AI 比對"]
+    mode_map = {
+        "混合比對（Hybrid）":"hybrid",
+        "精確比對（Exact）":"exact",
+        "語意比對（Semantic）":"semantic",
+        "AI 比對":"ai",
+    }
+    current_label = next(k for k,v in mode_map.items() if v == st.session_state.comparison_mode)
+    selected_label = st.radio("比對模式", mode_labels, index=mode_labels.index(current_label))
+    st.session_state.comparison_mode = mode_map[selected_label]
+
+    st.session_state.similarity_threshold = st.slider("相似度閾值", 0.0, 1.0, st.session_state.similarity_threshold, 0.05)
 
     st.divider(); st.subheader("🔍 OCR 設定")
     st.session_state.use_ocr = st.checkbox("啟用 OCR", value=st.session_state.use_ocr)
     if st.session_state.use_ocr:
         ocr_choice = st.radio("OCR 引擎", ["Qwen（內建）","EasyOCR（內建）","Tesseract（內建）","自定義 OCR API"], horizontal=True)
-ocr_map = {
-    "Qwen（內建）":"qwen_builtin",
-    "EasyOCR（內建）":"easyocr",
-    "Tesseract（內建）":"tesseract",
-    "自定義 OCR API":"ocr_custom"
-}
-st.session_state.ocr_engine = ocr_map[ocr_choice]
+        ocr_map = {
+            "Qwen（內建）":"qwen_builtin",
+            "EasyOCR（內建）":"easyocr",
+            "Tesseract（內建）":"tesseract",
+            "自定義 OCR API":"ocr_custom"
+        }
+        st.session_state.ocr_engine = ocr_map[ocr_choice]
         if st.session_state.ocr_engine in {"ocr_custom","qwen_api"}:
             st.session_state.ocr_api_key = st.text_input("OCR API Key", type="password", value=st.session_state.ocr_api_key)
 
