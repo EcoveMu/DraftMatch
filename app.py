@@ -207,7 +207,7 @@ if st.button("🚀 開始比對", use_container_width=True):
         else:
             st.info("此頁無匹配段落")
 
-if st.session_state.selected_pages:
-    if st.button("🔄 重新選擇 PDF 頁面"):
-        st.experimental_rerun()
-    st.experimental_rerun()
+        if st.session_state.selected_pages:
+            if st.button("🔄 重新選擇 PDF 頁面"):
+             st.experimental_rerun()
+             st.experimental_rerun()
