@@ -220,6 +220,12 @@ def pdf_page_image(pdf_bytes, page, zoom=0.8):
 # ------------------------------ 主流程 UI -----------------------------------
 ###############################################################################
 
+# 定義 start_btn_disabled
+start_btn_disabled = not (
+    st.session_state.uploaded_word and 
+    st.session_state.uploaded_pdf and 
+    st.session_state.selected_pages
+)
 
 # 處理PDF頁面選擇
 if st.session_state.uploaded_pdf:
@@ -232,30 +238,7 @@ if st.session_state.uploaded_pdf:
 
 st.markdown("---")
 
-can_start = (st.session_state.uploaded_word and st.session_state.uploaded_pdf and st.session_state.selected_pages)
-if st.button("🚀 開始比對", disabled=not can_start):
-    # … 組 PDF、extract、compare_pdf_first() …
-    st.success("比對完成！")
-    
-    # 比對結果最上方重選
-    if st.button("🔄 重新選擇 PDF 頁面", key="post_reset_top"):
-        st.session_state.selected_pages = None
-        st.experimental_rerun()
-
-    # 顯示每一頁結果
-    for p in st.session_state.selected_pages:
-        st.subheader(f"PDF 頁 {p}")
-        try:
-            st.image(pdf_page_image(pdf_bytes, p), use_container_width=True)
-        except Exception as e:
-            st.error(f"無法顯示頁面 {p} 圖像：{e}")
-        # … match table & expander …
-
-    # 比對結果最下方重選
-    if st.button("🔄 重新選擇 PDF 頁面", key="post_reset_bottom"):
-        st.session_state.selected_pages = None
-        st.experimental_rerun()
-
+# 使用 start_btn_disabled
 if st.button("🚀 開始比對", use_container_width=True, disabled=start_btn_disabled, key="start_compare"):
     word_file = st.session_state.uploaded_word
     pdf_file = st.session_state.uploaded_pdf
@@ -267,9 +250,13 @@ if st.button("🚀 開始比對", use_container_width=True, disabled=start_btn_d
     sub_pdf = build_sub_pdf(pdf_file, pages) if total_pages > MAX_PAGES else io.BytesIO(pdf_file.read())
     sub_pdf.seek(0)
 
+    # 定義 pdf_bytes
+    pdf_bytes = sub_pdf.getvalue()
+
     # 提取 Word 和 PDF 文本內容
     word_data = extract_text_from_word(word_file)
     pdf_paragraphs = extract_text_from_pdf_with_page_info(sub_pdf)
+
     # **處理子PDF頁碼**：如果使用了子PDF，將段落中的頁碼轉換回原始PDF的頁碼
     if total_pages > MAX_PAGES:
         for para in pdf_paragraphs:
@@ -295,59 +282,25 @@ if st.button("🚀 開始比對", use_container_width=True, disabled=start_btn_d
     )
 
     st.success(f"完成！匹配 {res['statistics']['matched']} 段 / PDF 段 {res['statistics']['total_pdf']}")
-    # **結果頂部新增重新選擇頁面按鈕**，方便用戶在查看比對結果時重置選擇
-    if st.button("🔄 重新選擇 PDF 頁面", key="reset_pages_top"):
+    
+    # 比對結果最上方重選
+    if st.button("🔄 重新選擇 PDF 頁面", key="post_reset_top"):
         st.session_state.selected_pages = None
         st.experimental_rerun()
 
-    # 逐頁顯示比對結果
-    page_matches = defaultdict(list)
-    for m in res["matches"]:
-        page_matches[m["pdf_page"]].append(m)
+    # 顯示每一頁結果
+    for p in st.session_state.selected_pages:
+        st.subheader(f"PDF 頁 {p}")
+        try:
+            st.image(pdf_page_image(pdf_bytes, p), use_container_width=True)
+        except Exception as e:
+            st.error(f"無法顯示頁面 {p} 圖像：{e}")
+        # … match table & expander …
 
-    pdf_bytes = sub_pdf.getvalue()
-    if total_pages > MAX_PAGES:
-        # **使用子PDF時**：逐一顯示原始頁面的結果，並從子PDF中取得對應頁面的圖像
-        for idx, p in enumerate(pages, start=1):
-            st.subheader(f"📄 PDF 頁 {p}")
-            try:
-                st.image(pdf_page_image(pdf_bytes, idx), use_column_width=True)
-            except Exception as e:
-                st.error(f"無法顯示頁面 {p} 圖像: {e}")
-            if p in page_matches:
-                df = pd.DataFrame([{"Word段": m["word_index"], "相似度": f"{m['similarity']:.2f}"} for m in page_matches[p]])
-                st.dataframe(df, use_container_width=True)
-                for m in page_matches[p]:
-                    with st.expander(f"Word 段 {m['word_index']} (相似度 {m['similarity']:.2f})", expanded=False):
-                        st.markdown("**Word：**")
-                        st.write(m["word_text"])
-                        st.markdown("**PDF 片段：**")
-                        st.write(m["pdf_text"])
-                        st.markdown("**差異：**", unsafe_allow_html=True)
-                        st.markdown(m["diff_html"], unsafe_allow_html=True)
-            else:
-                st.info("此頁無匹配段落")
-    else:
-        # **PDF頁數不多時**：直接使用完整PDF逐頁顯示結果
-        for p in pages:
-            st.subheader(f"📄 PDF 頁 {p}")
-            try:
-                st.image(pdf_page_image(pdf_bytes, p), use_column_width=True)
-            except Exception as e:
-                st.error(f"無法顯示頁面 {p} 圖像: {e}")
-            if p in page_matches:
-                df = pd.DataFrame([{"Word段": m["word_index"], "相似度": f"{m['similarity']:.2f}"} for m in page_matches[p]])
-                st.dataframe(df, use_container_width=True)
-                for m in page_matches[p]:
-                    with st.expander(f"Word 段 {m['word_index']} (相似度 {m['similarity']:.2f})", expanded=False):
-                        st.markdown("**Word：**")
-                        st.write(m["word_text"])
-                        st.markdown("**PDF 片段：**")
-                        st.write(m["pdf_text"])
-                        st.markdown("**差異：**", unsafe_allow_html=True)
-                        st.markdown(m["diff_html"], unsafe_allow_html=True)
-            else:
-                st.info("此頁無匹配段落")
+    # 比對結果最下方重選
+    if st.button("🔄 重新選擇 PDF 頁面", key="post_reset_bottom"):
+        st.session_state.selected_pages = None
+        st.experimental_rerun()
 
 # **結果底部也提供重新選擇頁面按鈕**（功能與頂部按鈕相同）
 if st.session_state.selected_pages is not None and st.button("🔄 重新選擇 PDF 頁面", key="reset_pages"):
