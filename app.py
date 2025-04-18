@@ -220,21 +220,41 @@ def pdf_page_image(pdf_bytes, page, zoom=0.8):
 # ------------------------------ 主流程 UI -----------------------------------
 ###############################################################################
 
-# ... (上方其他UI代碼，例如文件上傳區域等) ...
 
 # 處理PDF頁面選擇
 if st.session_state.uploaded_pdf:
     select_pdf_pages(st.session_state.uploaded_pdf)
 
+    if st.session_state.selected_pages is not None:
+        if st.button("🔄 重新選擇 PDF 頁面", key="pre_reset"):
+            st.session_state.selected_pages = None
+            st.experimental_rerun()
+
 st.markdown("---")
 
-# 開始比對按鈕
-can_start = (
-    st.session_state.uploaded_word is not None
-    and st.session_state.uploaded_pdf is not None
-    and st.session_state.selected_pages is not None
-)
-start_btn_disabled = not can_start
+can_start = (st.session_state.uploaded_word and st.session_state.uploaded_pdf and st.session_state.selected_pages)
+if st.button("🚀 開始比對", disabled=not can_start):
+    # … 組 PDF、extract、compare_pdf_first() …
+    st.success("比對完成！")
+    
+    # 比對結果最上方重選
+    if st.button("🔄 重新選擇 PDF 頁面", key="post_reset_top"):
+        st.session_state.selected_pages = None
+        st.experimental_rerun()
+
+    # 顯示每一頁結果
+    for p in st.session_state.selected_pages:
+        st.subheader(f"PDF 頁 {p}")
+        try:
+            st.image(pdf_page_image(pdf_bytes, p), use_container_width=True)
+        except Exception as e:
+            st.error(f"無法顯示頁面 {p} 圖像：{e}")
+        # … match table & expander …
+
+    # 比對結果最下方重選
+    if st.button("🔄 重新選擇 PDF 頁面", key="post_reset_bottom"):
+        st.session_state.selected_pages = None
+        st.experimental_rerun()
 
 if st.button("🚀 開始比對", use_container_width=True, disabled=start_btn_disabled, key="start_compare"):
     word_file = st.session_state.uploaded_word
