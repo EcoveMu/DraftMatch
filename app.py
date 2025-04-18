@@ -20,7 +20,7 @@ st.markdown('本系統用於比對原始Word文件與美編後PDF文件的內容
 # ------------- Session Defaults -----------------
 DEFAULTS = dict(
     comparison_mode="hybrid",
-    similarity_threshold=0.6,
+    similarity_threshold=0.5,
     use_ocr=False,
     ocr_engine="qwen_builtin",
     ocr_api_key="",
@@ -40,17 +40,31 @@ for k,v in DEFAULTS.items():
 # ------------- Side Bar -----------------
 with st.sidebar:
     st.header("⚙️ 比對設定")
-    mode_map = {"混合比對（Hybrid）":"hybrid","精確比對（Exact）":"exact","語意比對（Semantic）":"semantic","AI 比對":"ai"}
-    selected = st.radio("比對模式", list(mode_map.keys()), index=list(mode_map.values()).index(st.session_state.comparison_mode))
-    st.session_state.comparison_mode = mode_map[selected]
+    # ---- 比對模式 ----
+mode_labels = ["混合比對（Hybrid）","精確比對（Exact）","語意比對（Semantic）","AI 比對"]
+mode_map = {
+    "混合比對（Hybrid）":"hybrid",
+    "精確比對（Exact）":"exact",
+    "語意比對（Semantic）":"semantic",
+    "AI 比對":"ai",
+}
+current_label = next(k for k,v in mode_map.items() if v == st.session_state.comparison_mode)
+selected_label = st.radio("比對模式", mode_labels, index=mode_labels.index(current_label))
+st.session_state.comparison_mode = mode_map[selected_label]
     st.session_state.similarity_threshold = st.slider("相似度閾值",0.0,1.0, st.session_state.similarity_threshold, 0.05)
 
     st.divider(); st.subheader("🔍 OCR 設定")
     st.session_state.use_ocr = st.checkbox("啟用 OCR", value=st.session_state.use_ocr)
     if st.session_state.use_ocr:
-        ocr_choice = st.radio("OCR 引擎", ["Qwen（內建）","EasyOCR","Tesseract"], horizontal=True)
-        st.session_state.ocr_engine = {"Qwen（內建）":"qwen_builtin","EasyOCR":"easyocr","Tesseract":"tesseract"}[ocr_choice]
-        if st.session_state.ocr_engine in {"qwen_api"}:
+        ocr_choice = st.radio("OCR 引擎", ["Qwen（內建）","EasyOCR（內建）","Tesseract（內建）","自定義 OCR API"], horizontal=True)
+ocr_map = {
+    "Qwen（內建）":"qwen_builtin",
+    "EasyOCR（內建）":"easyocr",
+    "Tesseract（內建）":"tesseract",
+    "自定義 OCR API":"ocr_custom"
+}
+st.session_state.ocr_engine = ocr_map[ocr_choice]
+        if st.session_state.ocr_engine in {"ocr_custom","qwen_api"}:
             st.session_state.ocr_api_key = st.text_input("OCR API Key", type="password", value=st.session_state.ocr_api_key)
 
     st.divider(); st.subheader("🤖 生成式 AI 設定")
@@ -85,9 +99,6 @@ with col2:
     st.subheader("美編後PDF文件")
     pdf_file = st.file_uploader("上傳美編後 PDF 文件", type=["pdf"], key="pdf_uploader")
     if pdf_file: st.success(f"已上傳: {pdf_file.name}")
-
-# 示例文件選項
-use_example_files = st.checkbox("使用示例文件進行演示", value=False)
 
 MAX_PAGES = 20
 def get_pdf_page_count(uploaded):
@@ -132,45 +143,25 @@ if pdf_file: select_pdf_pages(pdf_file)
 
 # ------------- Comparison -----------------
 st.markdown("---")
-# ------------- Comparison -----------------
-st.markdown("---")
 if st.button("🚀 開始比對", use_container_width=True):
-    # --- 驗證文件或示例 ---
-    if not use_example_files and (not word_file or not pdf_file):
-        st.error("請同時上傳 Word 與 PDF 文件，或勾選使用示例文件")
+    if not word_file or not pdf_file:
+        st.error("請同時上傳 Word 與 PDF 文件")
         st.stop()
-    if use_example_files:
-        sample_dir = Path(__file__).parent / "examples"
-        word_path = sample_dir / "sample.docx"
-        pdf_path = sample_dir / "sample.pdf"
-        if not word_path.exists() or not pdf_path.exists():
-            st.error("找不到示例文件，請確認 examples 目錄存在 sample.docx / sample.pdf")
-            st.stop()
-        # 直接開啟示例 PDF
-        pdf_file_bytes = pdf_path.read_bytes()
-        total_pages = len(fitz.open(stream=pdf_file_bytes, filetype="pdf"))
-        pages = list(range(1, min(total_pages, MAX_PAGES)+1))
-        sub_pdf = io.BytesIO(pdf_file_bytes)
-        word_data = extract_text_from_word(str(word_path))
-    else:
-        # --- 處理使用者上傳之 PDF ---
-        total_pages = get_pdf_page_count(pdf_file)
-        # 若頁數超限，且尚未選頁
-        if total_pages > MAX_PAGES and not st.session_state.selected_pages:
-            st.error("請先選擇要比對的 PDF 頁面")
-            st.stop()
-        pages = st.session_state.selected_pages if st.session_state.selected_pages else list(range(1,total_pages+1))
-        sub_pdf = build_sub_pdf(pdf_file, pages) if st.session_state.selected_pages else io.BytesIO(pdf_file.read())
-        sub_pdf.seek(0)
-        word_data = extract_text_from_word(word_file)
-
-    # 抽取 PDF 文字
+    # Prepare PDF bytes
+    total_pages = get_pdf_page_count(pdf_file)
+    if total_pages>MAX_PAGES and not st.session_state.selected_pages:
+        st.error("請先選擇要比對的 PDF 頁面")
+        st.stop()
+    pages = st.session_state.selected_pages if st.session_state.selected_pages else list(range(1,total_pages+1))
+    sub_pdf = build_sub_pdf(pdf_file, pages) if st.session_state.selected_pages else io.BytesIO(pdf_file.read())
+    sub_pdf.seek(0)
+    # Extract text
+    word_data = extract_text_from_word(word_file)
     pdf_paragraphs = extract_text_from_pdf_with_page_info(sub_pdf)
     pdf_data = {"paragraphs": pdf_paragraphs, "tables":[]}
-
-    # AI / OCR
+    # AI / OCR instance (stub)
     ai_instance = CustomAI() if st.session_state.use_ai else None
-
+    # Compare
     st.info("比對中，請稍候...")
     res = compare_pdf_first(
         word_data, pdf_data,
@@ -186,7 +177,7 @@ if st.button("🚀 開始比對", use_container_width=True):
     )
     st.success(f"完成！匹配 {res['statistics']['matched']} 段 / PDF 段 {res['statistics']['total_pdf']}")
 
-    # --- 結果呈現 ---
+    # Group by page
     page_matches = defaultdict(list)
     for m in res['matches']:
         page_matches[m['pdf_page']].append(m)
@@ -209,9 +200,6 @@ if st.button("🚀 開始比對", use_container_width=True):
         else:
             st.info("此頁無匹配段落")
 
-    if not use_example_files and st.button("🔄 重新選擇 PDF 頁面"):
-        st.session_state.selected_pages = None
-        st.experimental_rerun()
-if st.button("🔄 重新選擇 PDF 頁面"):
+    if st.button("🔄 重新選擇 PDF 頁面"):
         st.session_state.selected_pages = None
         st.experimental_rerun()
