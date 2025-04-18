@@ -160,19 +160,20 @@ def select_pdf_pages(pdf_file):
     if st.session_state.selected_pages is not None:
         if st.button("🔄 重新選擇 PDF 頁面", key="pre_reset"):
             st.session_state.selected_pages = None
-            # 確保狀態更新後再重新加載
             st.stop()
 
     total = get_pdf_page_count(pdf_file)
     st.session_state.total_pages = total
 
     if total <= MAX_PAGES:
-        st.session_state.selected_pages = list(range(1, total + 1))
         st.info(f"PDF 共 {total} 頁，將全數比對。")
+        pages = list(range(1, total + 1))
+        if st.button("✅ 確定頁面", key="confirm_all_pages"):
+            st.session_state.selected_pages = pages
+            st.success(f"已選擇頁面: {pages}")
         return
 
     st.warning(f"PDF 共 {total} 頁，系統一次最多比對 {MAX_PAGES} 頁，請選擇需比對頁面。")
-
     mode = st.radio("頁面選擇方式", ["連續區間", "指定頁碼"], key="page_select_mode")
 
     if mode == "連續區間":
