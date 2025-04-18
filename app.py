@@ -40,7 +40,7 @@ for k,v in DEFAULTS.items():
 # ------------- Side Bar -----------------
 with st.sidebar:
     st.header("⚙️ 比對設定")
-    mode_map = {"Hybrid":"hybrid","Exact":"exact","Semantic":"semantic","AI":"ai"}
+    mode_map = {"混合比對（Hybrid）":"hybrid","精確比對（Exact）":"exact","語意比對（Semantic）":"semantic","AI 比對":"ai"}
     selected = st.radio("比對模式", list(mode_map.keys()), index=list(mode_map.values()).index(st.session_state.comparison_mode))
     st.session_state.comparison_mode = mode_map[selected]
     st.session_state.similarity_threshold = st.slider("相似度閾值",0.0,1.0, st.session_state.similarity_threshold, 0.05)
@@ -86,6 +86,9 @@ with col2:
     pdf_file = st.file_uploader("上傳美編後 PDF 文件", type=["pdf"], key="pdf_uploader")
     if pdf_file: st.success(f"已上傳: {pdf_file.name}")
 
+# 示例文件選項
+use_example_files = st.checkbox("使用示例文件進行演示", value=False)
+
 MAX_PAGES = 20
 def get_pdf_page_count(uploaded):
     pos=uploaded.tell(); uploaded.seek(0); count=len(fitz.open("pdf", uploaded.read())); uploaded.seek(pos); return count
@@ -129,25 +132,45 @@ if pdf_file: select_pdf_pages(pdf_file)
 
 # ------------- Comparison -----------------
 st.markdown("---")
+# ------------- Comparison -----------------
+st.markdown("---")
 if st.button("🚀 開始比對", use_container_width=True):
-    if not word_file or not pdf_file:
-        st.error("請同時上傳 Word 與 PDF 文件")
+    # --- 驗證文件或示例 ---
+    if not use_example_files and (not word_file or not pdf_file):
+        st.error("請同時上傳 Word 與 PDF 文件，或勾選使用示例文件")
         st.stop()
-    # Prepare PDF bytes
-    total_pages = get_pdf_page_count(pdf_file)
-    if total_pages>MAX_PAGES and not st.session_state.selected_pages:
-        st.error("請先選擇要比對的 PDF 頁面")
-        st.stop()
-    pages = st.session_state.selected_pages if st.session_state.selected_pages else list(range(1,total_pages+1))
-    sub_pdf = build_sub_pdf(pdf_file, pages) if st.session_state.selected_pages else io.BytesIO(pdf_file.read())
-    sub_pdf.seek(0)
-    # Extract text
-    word_data = extract_text_from_word(word_file)
+    if use_example_files:
+        sample_dir = Path(__file__).parent / "examples"
+        word_path = sample_dir / "sample.docx"
+        pdf_path = sample_dir / "sample.pdf"
+        if not word_path.exists() or not pdf_path.exists():
+            st.error("找不到示例文件，請確認 examples 目錄存在 sample.docx / sample.pdf")
+            st.stop()
+        # 直接開啟示例 PDF
+        pdf_file_bytes = pdf_path.read_bytes()
+        total_pages = len(fitz.open(stream=pdf_file_bytes, filetype="pdf"))
+        pages = list(range(1, min(total_pages, MAX_PAGES)+1))
+        sub_pdf = io.BytesIO(pdf_file_bytes)
+        word_data = extract_text_from_word(str(word_path))
+    else:
+        # --- 處理使用者上傳之 PDF ---
+        total_pages = get_pdf_page_count(pdf_file)
+        # 若頁數超限，且尚未選頁
+        if total_pages > MAX_PAGES and not st.session_state.selected_pages:
+            st.error("請先選擇要比對的 PDF 頁面")
+            st.stop()
+        pages = st.session_state.selected_pages if st.session_state.selected_pages else list(range(1,total_pages+1))
+        sub_pdf = build_sub_pdf(pdf_file, pages) if st.session_state.selected_pages else io.BytesIO(pdf_file.read())
+        sub_pdf.seek(0)
+        word_data = extract_text_from_word(word_file)
+
+    # 抽取 PDF 文字
     pdf_paragraphs = extract_text_from_pdf_with_page_info(sub_pdf)
     pdf_data = {"paragraphs": pdf_paragraphs, "tables":[]}
-    # AI / OCR instance (stub)
+
+    # AI / OCR
     ai_instance = CustomAI() if st.session_state.use_ai else None
-    # Compare
+
     st.info("比對中，請稍候...")
     res = compare_pdf_first(
         word_data, pdf_data,
@@ -163,7 +186,7 @@ if st.button("🚀 開始比對", use_container_width=True):
     )
     st.success(f"完成！匹配 {res['statistics']['matched']} 段 / PDF 段 {res['statistics']['total_pdf']}")
 
-    # Group by page
+    # --- 結果呈現 ---
     page_matches = defaultdict(list)
     for m in res['matches']:
         page_matches[m['pdf_page']].append(m)
@@ -186,6 +209,9 @@ if st.button("🚀 開始比對", use_container_width=True):
         else:
             st.info("此頁無匹配段落")
 
-    if st.button("🔄 重新選擇 PDF 頁面"):
+    if not use_example_files and st.button("🔄 重新選擇 PDF 頁面"):
+        st.session_state.selected_pages = None
+        st.experimental_rerun()
+if st.button("🔄 重新選擇 PDF 頁面"):
         st.session_state.selected_pages = None
         st.experimental_rerun()
