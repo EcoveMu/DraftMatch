@@ -158,9 +158,10 @@ def get_pdf_page_count(uploaded):
 def select_pdf_pages(pdf_file):
     """顯示頁面選擇 UI，並把結果寫入 session_state.selected_pages"""
     if st.session_state.selected_pages is not None:
-        # 已選過頁面，直接顯示資訊
-        st.info(f"將比對頁面: {st.session_state.selected_pages}")
-        return
+        if st.button("🔄 重新選擇 PDF 頁面", key="pre_reset"):
+            st.session_state.selected_pages = None
+            # 確保狀態更新後再重新加載
+            st.stop()
 
     total = get_pdf_page_count(pdf_file)
     st.session_state.total_pages = total
@@ -283,6 +284,9 @@ if st.button("🚀 開始比對", use_container_width=True, disabled=start_btn_d
 
     st.success(f"完成！匹配 {res['statistics']['matched']} 段 / PDF 段 {res['statistics']['total_pdf']}")
     
+    # 比對完成後設置狀態
+    st.session_state.comparison_done = True
+
     # 比對結果最上方重選
     if st.button("🔄 重新選擇 PDF 頁面", key="post_reset_top"):
         st.session_state.selected_pages = None
@@ -302,7 +306,8 @@ if st.button("🚀 開始比對", use_container_width=True, disabled=start_btn_d
         st.session_state.selected_pages = None
         st.experimental_rerun()
 
-# **結果底部也提供重新選擇頁面按鈕**（功能與頂部按鈕相同）
-if st.session_state.selected_pages is not None and st.button("🔄 重新選擇 PDF 頁面", key="reset_pages"):
-    st.session_state.selected_pages = None
-    st.experimental_rerun()
+# **結果底部也提供重新選擇頁面按鈕**（僅在比對完成後顯示）
+if "comparison_done" in st.session_state and st.session_state.comparison_done:
+    if st.button("🔄 重新選擇 PDF 頁面", key="reset_pages"):
+        st.session_state.selected_pages = None
+        st.experimental_rerun()
