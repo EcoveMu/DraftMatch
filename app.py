@@ -106,6 +106,7 @@ MAX_PAGES = 20
 def get_pdf_page_count(uploaded):
     pos=uploaded.tell(); uploaded.seek(0); count=len(fitz.open("pdf", uploaded.read())); uploaded.seek(pos); return count
 
+
 def select_pdf_pages(pdf_file):
     if "selected_pages" not in st.session_state or st.session_state.selected_pages is None:
         total = get_pdf_page_count(pdf_file)
@@ -113,24 +114,20 @@ def select_pdf_pages(pdf_file):
         if total > MAX_PAGES:
             st.warning(f"PDF 共 {total} 頁，系統一次最多比對 {MAX_PAGES} 頁，請選擇需比對頁面。")
             mode = st.radio("頁面選擇方式", ["連續區間","指定頁碼"])
-            if mode=="連續區間":
-                s,e=st.columns(2)
-                start = s.number_input("起始頁",1,total,1,1)
-                end = e.number_input("結束頁",start,min(start+MAX_PAGES-1,total),start+MAX_PAGES-1,1)
-                pages = list(range(int(start),int(end)+1))
+            if mode == "連續區間":
+                s, e = st.columns(2)
+                start = s.number_input("起始頁", 1, total, 1, 1)
+                end = e.number_input("結束頁", start, min(start + MAX_PAGES - 1, total), start + MAX_PAGES - 1, 1)
+                pages = list(range(int(start), int(end) + 1))
             else:
-                pages = st.multiselect("選擇頁碼", list(range(1,total+1)))
-            if st.button("✅ 確定頁面") and pages and 1<=len(pages)<=MAX_PAGES:
+                pages = st.multiselect("選擇頁碼", list(range(1, total + 1)))
+
+            if st.button("✅ 確定頁面") and pages and 1 <= len(pages) <= MAX_PAGES:
                 st.session_state.selected_pages = sorted(set(pages))
                 st.success(f"已選擇頁面: {st.session_state.selected_pages}")
+
     if st.session_state.selected_pages:
         st.info(f"將比對頁面: {st.session_state.selected_pages}")
-
-    if st.button("🔄 重新選擇 PDF 頁面", key="reset_pages_before"):
-        st.session_state.selected_pages = None
-        st.experimental_rerun()
-
-
 def build_sub_pdf(uploaded, pages):
     pos=uploaded.tell(); uploaded.seek(0); data=uploaded.read(); uploaded.seek(pos)
     src=fitz.open(stream=data, filetype="pdf")
