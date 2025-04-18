@@ -206,4 +206,9 @@ if st.button("🚀 開始比對", use_container_width=True):
 
     if st.button("🔄 重新選擇 PDF 頁面"):
         st.session_state.selected_pages = None
-        st.experimental_rerun()
+        st.experimental_rerun(
+if st.button("🔄 重新選擇 PDF 頁面") and st.session_state.selected_pages:
+    st.session_state.selected_pages = None
+    st.experimental_rerun()
+
+)
