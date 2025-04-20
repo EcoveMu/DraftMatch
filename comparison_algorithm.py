@@ -1,4 +1,3 @@
-
 """comparison_algorithm.py  (rev‑2025‑04‑18b)
 
 在 rev‑04‑18 基礎上新增 **substring_similarity**：
@@ -66,11 +65,43 @@ def _diff_html(a:str, b:str)->str:
             buf.append(f'<span class="diff-added">{html.escape(s[2:])}</span>')
     return ''.join(buf)
 
-def compare_pdf_first(word_data:dict, pdf_data:dict,
-                      comparison_mode:str='hybrid',
-                      similarity_threshold:float=0.6,
-                      ignore_options:dict|None=None,
-                      ai_instance=None)->dict:
+def merge_word_paragraphs(paragraphs: list, max_distance: int = 3) -> list:
+    """合併鄰近的 Word 段落以支援多段對一組合"""
+    merged = []
+    n = len(paragraphs)
+    
+    for i in range(n):
+        current = paragraphs[i]
+        # 單段
+        merged.append({
+            'content': current['content'],
+            'indices': [current['index']],
+            'processed': current['processed']
+        })
+        
+        # 嘗試與後續段落組合（最多合併 max_distance 個段落）
+        combined_text = current['content']
+        indices = [current['index']]
+        
+        for j in range(i + 1, min(i + max_distance + 1, n)):
+            next_para = paragraphs[j]
+            combined_text += '\n' + next_para['content']
+            indices.append(next_para['index'])
+            
+            merged.append({
+                'content': combined_text,
+                'indices': indices.copy(),
+                'processed': preprocess(combined_text)
+            })
+    
+    return merged
+
+def compare_pdf_first(word_data: dict, pdf_data: dict,
+                     comparison_mode: str = 'hybrid',
+                     similarity_threshold: float = 0.6,
+                     ignore_options: dict = None,
+                     ai_instance = None) -> dict:
+    """改進的比對算法，支援多段對一頁比對"""
     if ignore_options is None:
         ignore_options = dict(ignore_space=True, ignore_punctuation=True,
                               ignore_case=True, ignore_newline=True)
@@ -92,45 +123,51 @@ def compare_pdf_first(word_data:dict, pdf_data:dict,
     for p in word_data['paragraphs']:
         p['processed']=preprocess(p['content'])
 
-    matches=[]
-    used_word=set()
-
+    # 生成 Word 段落的各種組合
+    word_combinations = merge_word_paragraphs(word_data['paragraphs'])
+    
+    matches = []
+    used_word_indices = set()
+    
     for pdf_para in pdf_data['paragraphs']:
-        best=None; best_sim=0.0; best_idx=-1
-        for w in word_data['paragraphs']:
-            # --- substring quick win ---
-            sub_sim = substring_similarity(pdf_para['processed'], w['processed'])
-            if sub_sim>=similarity_threshold and sub_sim>best_sim:
-                best_sim=sub_sim; best=w; best_idx=w['index']; continue
-
-            if comparison_mode=='exact':
-                sim = exact_matching(pdf_para['processed'], w['processed'], False, False, False)
-            elif comparison_mode=='semantic':
-                sim = semantic_matching(pdf_para['processed'], w['processed'])
-            elif comparison_mode=='hybrid':
-                sim = hybrid_matching(pdf_para['processed'], w['processed'])
-            elif comparison_mode=='ai' and ai_instance:
-                sim,_ = ai_instance.semantic_comparison(pdf_para['content'], w['content'])
-            else:
-                sim=0.0
-            if sim>best_sim:
-                best_sim=sim; best=w; best_idx=w['index']
-        if best and best_sim>=similarity_threshold:
-            matches.append(dict(
-                pdf_index=pdf_para['index'],
-                pdf_page=pdf_para.get('page'),
-                pdf_text=pdf_para['content'],
-                word_index=best_idx,
-                word_text=best['content'],
-                similarity=best_sim,
-                diff_html=_diff_html(best['content'], pdf_para['content'])
-            ))
-            used_word.add(best_idx)
-
+        best_match = None
+        best_sim = 0.0
+        
+        for word_combo in word_combinations:
+            # 跳過已使用的段落組合
+            if any(idx in used_word_indices for idx in word_combo['indices']):
+                continue
+                
+            # 計算相似度
+            if comparison_mode == 'hybrid':
+                sim = hybrid_matching(pdf_para['processed'], word_combo['processed'])
+            elif comparison_mode == 'semantic':
+                sim = semantic_matching(pdf_para['processed'], word_combo['processed'])
+            elif comparison_mode == 'ai' and ai_instance:
+                sim, _ = ai_instance.semantic_comparison(pdf_para['content'], word_combo['content'])
+            else:  # exact
+                sim = exact_matching(pdf_para['processed'], word_combo['processed'])
+                
+            if sim > best_sim and sim >= similarity_threshold:
+                best_sim = sim
+                best_match = word_combo
+        
+        if best_match:
+            matches.append({
+                'pdf_index': pdf_para['index'],
+                'pdf_page': pdf_para.get('page'),
+                'pdf_text': pdf_para['content'],
+                'word_indices': best_match['indices'],
+                'word_text': best_match['content'],
+                'similarity': best_sim,
+                'diff_html': _diff_html(best_match['content'], pdf_para['content'])
+            })
+            used_word_indices.update(best_match['indices'])
+    
     unmatched_pdf=[p for p in pdf_data['paragraphs']
                    if p['index'] not in {m['pdf_index'] for m in matches}]
     unmatched_word=[p for p in word_data['paragraphs']
-                    if p['index'] not in used_word]
+                    if p['index'] not in used_word_indices]
 
     stats=dict(
         total_pdf=len(pdf_data['paragraphs']),

@@ -235,6 +235,15 @@ def pdf_page_image(pdf_bytes, page, zoom=0.8):
         pix = doc.load_page(page - 1).get_pixmap(matrix=fitz.Matrix(zoom, zoom))
         return pix.tobytes("png")
 
+def display_matches(matches, page_number):
+    df = pd.DataFrame({
+        'PDF 文本': [m['pdf_text'] for m in matches],
+        'Word 文本': [m['word_text'] for m in matches],
+        'Word 段落編號': [', '.join(map(str, m['word_indices'])) for m in matches],
+        '相似度': [f"{m['similarity']:.2%}" for m in matches]
+    })
+    st.dataframe(df, use_container_width=True)
+
 ###############################################################################
 # ------------------------------ 主流程 UI -----------------------------------
 ###############################################################################
@@ -312,13 +321,8 @@ if st.button("🚀 開始比對", use_container_width=True, disabled=start_btn_d
         page_matches = [m for m in res['matches'] if m['pdf_page'] == p]
         
         if page_matches:
-            # 建立比對結果表格
-            df = pd.DataFrame({
-                'PDF 文本': [m['pdf_text'] for m in page_matches],
-                'Word 文本': [m['word_text'] for m in page_matches],
-                '相似度': [f"{m['similarity']:.2%}" for m in page_matches]
-            })
-            st.dataframe(df, use_container_width=True)
+            # 使用 display_matches 函式顯示比對結果表格
+            display_matches(page_matches, p)
             
             # 差異細節展開區
             with st.expander("查看詳細差異"):
