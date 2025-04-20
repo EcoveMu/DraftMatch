@@ -308,3 +308,13 @@ if st.button("🚀 開始比對", use_container_width=True, disabled=start_btn_d
         except Exception as e:
             st.error(f"無法顯示頁面 {p} 圖像：{e}")
         # … match table & expander …
+
+    # 在最下方加入重選按鈕
+    st.markdown("---")  # 加入分隔線
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.success(f"已選擇頁面: {st.session_state.selected_pages}")
+    with col2:
+        if st.button("🔄 重新選擇 PDF 頁面", key="bottom_reset_btn"):
+            st.session_state.selected_pages = None
+            st.rerun()
