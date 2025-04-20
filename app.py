@@ -278,13 +278,27 @@ if st.button("🚀 開始比對", use_container_width=True, disabled=start_btn_d
 
     # 提取 Word 和 PDF 文本內容
     word_data = extract_text_from_word(word_file)
+    if not isinstance(word_data, dict):
+        word_data = {'paragraphs': word_data if isinstance(word_data, list) else []}
+
     pdf_paragraphs = extract_text_from_pdf_with_page_info(sub_pdf)
+    if not isinstance(pdf_paragraphs, list):
+        pdf_paragraphs = []
+
+    # 確保每個段落都有正確的格式
+    pdf_data = {
+        "paragraphs": [{
+            'content': p.get('content', ''),
+            'page': p.get('page', 1),
+            'index': i
+        } for i, p in enumerate(pdf_paragraphs)],
+        "tables": []
+    }
 
     # **處理子PDF頁碼**：如果使用了子PDF，將段落中的頁碼轉換回原始PDF的頁碼
     if total_pages > MAX_PAGES:
-        for para in pdf_paragraphs:
+        for para in pdf_data["paragraphs"]:
             para["page"] = pages[para["page"] - 1]
-    pdf_data = {"paragraphs": pdf_paragraphs, "tables": []}
 
     # AI / OCR 實例（如使用AI輔助比對）
     ai_instance = CustomAI() if st.session_state.use_ai else None

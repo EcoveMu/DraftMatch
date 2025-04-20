@@ -84,26 +84,36 @@ def _diff_html(a:str, b:str)->str:
 
 def merge_word_paragraphs(paragraphs: list, max_distance: int = 3, ignore_options: dict = None) -> list:
     """合併鄰近的 Word 段落以支援多段對一組合"""
+    if not paragraphs or not isinstance(paragraphs, list):
+        return []
+
     merged = []
     n = len(paragraphs)
     
     for i in range(n):
         current = paragraphs[i]
+        # 確保段落格式正確
+        if not isinstance(current, dict) or 'content' not in current:
+            continue
+            
         # 單段
         merged.append({
-            'content': current['content'],
-            'indices': [current['index']],
-            'processed': current['processed']  # 使用已處理的文本
+            'content': current.get('content', ''),
+            'indices': [current.get('index', i)],
+            'processed': current.get('processed', _preprocess(current.get('content', ''), ignore_options))
         })
         
         # 嘗試與後續段落組合
-        combined_text = current['content']
-        indices = [current['index']]
+        combined_text = current.get('content', '')
+        indices = [current.get('index', i)]
         
         for j in range(i + 1, min(i + max_distance + 1, n)):
             next_para = paragraphs[j]
-            combined_text += '\n' + next_para['content']
-            indices.append(next_para['index'])
+            if not isinstance(next_para, dict) or 'content' not in next_para:
+                continue
+                
+            combined_text += '\n' + next_para.get('content', '')
+            indices.append(next_para.get('index', j))
             
             merged.append({
                 'content': combined_text,
@@ -119,15 +129,28 @@ def compare_pdf_first(word_data: dict, pdf_data: dict,
                      ignore_options: dict = None,
                      ai_instance = None) -> dict:
     """改進的比對算法，支援多段對一頁比對"""
+    # 輸入驗證
+    if not isinstance(word_data, dict) or not isinstance(pdf_data, dict):
+        raise ValueError("word_data 和 pdf_data 必須是字典格式")
+    
+    if 'paragraphs' not in word_data or 'paragraphs' not in pdf_data:
+        raise ValueError("word_data 和 pdf_data 必須包含 'paragraphs' 鍵")
+        
+    if not isinstance(word_data['paragraphs'], list) or not isinstance(pdf_data['paragraphs'], list):
+        raise ValueError("paragraphs 必須是列表格式")
+
     if ignore_options is None:
         ignore_options = dict(ignore_space=True, ignore_punctuation=True,
                             ignore_case=True, ignore_newline=True)
 
     # 預處理所有段落
     for p in pdf_data['paragraphs']:
-        p['processed'] = _preprocess(p['content'], ignore_options)
+        if isinstance(p, dict) and 'content' in p:
+            p['processed'] = _preprocess(p['content'], ignore_options)
+    
     for p in word_data['paragraphs']:
-        p['processed'] = _preprocess(p['content'], ignore_options)
+        if isinstance(p, dict) and 'content' in p:
+            p['processed'] = _preprocess(p['content'], ignore_options)
 
     # 生成 Word 段落的各種組合
     word_combinations = merge_word_paragraphs(word_data['paragraphs'], 
