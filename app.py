@@ -306,9 +306,3 @@ if st.button("🚀 開始比對", use_container_width=True, disabled=start_btn_d
     if st.button("🔄 重新選擇 PDF 頁面", key="comparison_bottom_reset_btn"):  # Changed key
         st.session_state.selected_pages = None
         st.experimental_rerun()
-
-# **結果底部也提供重新選擇頁面按鈕**（僅在比對完成後顯示）
-if "comparison_done" in st.session_state and st.session_state.comparison_done:
-    if st.button("🔄 重新選擇 PDF 頁面", key="final_page_reset_btn"):  # Changed key
-        st.session_state.selected_pages = None
-        st.experimental_rerun()
