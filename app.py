@@ -171,7 +171,7 @@ def select_pdf_pages(pdf_file):
             with col2:
                 if st.button("🔄 重新選擇 PDF 頁面", key="reset_pages_btn"):
                     st.session_state.selected_pages = None
-                    st.experimental_rerun()
+                    st.rerun()
         return
 
     # 大於 MAX_PAGES 的情況
@@ -202,7 +202,7 @@ def select_pdf_pages(pdf_file):
             with col2:
                 if st.button("🔄 重新選擇 PDF 頁面", key="reset_pages_btn"):
                     st.session_state.selected_pages = None
-                    st.experimental_rerun()
+                    st.rerun()
     else:
         col1, col2 = st.columns([3, 1])
         with col1:
@@ -210,7 +210,7 @@ def select_pdf_pages(pdf_file):
         with col2:
             if st.button("🔄 重新選擇 PDF 頁面", key="reset_pages_btn"):
                 st.session_state.selected_pages = None
-                st.experimental_rerun()
+                st.rerun()
 
 
 def build_sub_pdf(uploaded, pages):
