@@ -307,7 +307,36 @@ if st.button("🚀 開始比對", use_container_width=True, disabled=start_btn_d
             st.image(pdf_page_image(pdf_bytes, p), use_container_width=True)
         except Exception as e:
             st.error(f"無法顯示頁面 {p} 圖像：{e}")
-        # … match table & expander …
+
+        # 過濾出當前頁的比對結果
+        page_matches = [m for m in res['matches'] if m['pdf_page'] == p]
+        
+        if page_matches:
+            # 建立比對結果表格
+            df = pd.DataFrame({
+                'PDF 文本': [m['pdf_text'] for m in page_matches],
+                'Word 文本': [m['word_text'] for m in page_matches],
+                '相似度': [f"{m['similarity']:.2%}" for m in page_matches]
+            })
+            st.dataframe(df, use_container_width=True)
+            
+            # 差異細節展開區
+            with st.expander("查看詳細差異"):
+                for m in page_matches:
+                    st.markdown(f"**相似度: {m['similarity']:.2%}**")
+                    st.markdown(m['diff_html'], unsafe_allow_html=True)
+                    st.divider()
+        else:
+            st.warning(f"本頁沒有找到匹配的內容")
+        
+        # 顯示未匹配段落
+        page_unmatched = [p for p in res['unmatched_pdf'] if p['page'] == p]
+        if page_unmatched:
+            with st.expander("未匹配段落"):
+                for um in page_unmatched:
+                    st.markdown(f"- {um['content']}")
+        
+        st.markdown("---")
 
     # 在最下方加入重選按鈕
     st.markdown("---")  # 加入分隔線
