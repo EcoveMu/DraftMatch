@@ -157,13 +157,6 @@ def get_pdf_page_count(uploaded):
 
 def select_pdf_pages(pdf_file):
     """顯示頁面選擇 UI，並把結果寫入 session_state.selected_pages"""
-    # 如果已經選擇頁面，顯示目前選擇和重選按鈕
-    if st.session_state.selected_pages is not None:
-        st.success(f"已選擇頁面: {st.session_state.selected_pages}")
-        if st.button("🔄 重新選擇 PDF 頁面", key="select_page_reset_btn"):
-            st.session_state.selected_pages = None
-        return
-
     total = get_pdf_page_count(pdf_file)
     st.session_state.total_pages = total
 
@@ -172,30 +165,52 @@ def select_pdf_pages(pdf_file):
         pages = list(range(1, total + 1))
         if st.button("✅ 確定頁面", key="confirm_all_pages"):
             st.session_state.selected_pages = pages
-            st.success(f"已選擇頁面: {pages}")
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.success(f"已選擇頁面: {pages}")
+            with col2:
+                if st.button("🔄 重新選擇 PDF 頁面", key="reset_pages_btn"):
+                    st.session_state.selected_pages = None
+                    st.experimental_rerun()
         return
 
-    st.warning(f"PDF 共 {total} 頁，系統一次最多比對 {MAX_PAGES} 頁，請選擇需比對頁面。")
-    mode = st.radio("頁面選擇方式", ["連續區間", "指定頁碼"], key="page_select_mode")
+    # 大於 MAX_PAGES 的情況
+    if st.session_state.selected_pages is None:
+        st.warning(f"PDF 共 {total} 頁，系統一次最多比對 {MAX_PAGES} 頁，請選擇需比對頁面。")
+        mode = st.radio("頁面選擇方式", ["連續區間", "指定頁碼"], key="page_select_mode")
 
-    if mode == "連續區間":
-        c1, c2 = st.columns(2)
-        start = c1.number_input("起始頁", 1, total, 1, 1, key="start_page")
-        end = c2.number_input(
-            "結束頁",
-            start,
-            min(start + MAX_PAGES - 1, total),
-            min(start + MAX_PAGES - 1, total),
-            1,
-            key="end_page",
-        )
-        pages = list(range(int(start), int(end) + 1))
+        if mode == "連續區間":
+            c1, c2 = st.columns(2)
+            start = c1.number_input("起始頁", 1, total, 1, 1, key="start_page")
+            end = c2.number_input(
+                "結束頁",
+                start,
+                min(start + MAX_PAGES - 1, total),
+                min(start + MAX_PAGES - 1, total),
+                1,
+                key="end_page",
+            )
+            pages = list(range(int(start), int(end) + 1))
+        else:
+            pages = st.multiselect("選擇頁碼", list(range(1, total + 1)), key="manual_pages")
+
+        if st.button("✅ 確定頁面", key="confirm_pages") and pages and len(pages) <= MAX_PAGES:
+            st.session_state.selected_pages = sorted(set(map(int, pages)))
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.success(f"已選擇頁面: {st.session_state.selected_pages}")
+            with col2:
+                if st.button("🔄 重新選擇 PDF 頁面", key="reset_pages_btn"):
+                    st.session_state.selected_pages = None
+                    st.experimental_rerun()
     else:
-        pages = st.multiselect("選擇頁碼", list(range(1, total + 1)), key="manual_pages")
-
-    if st.button("✅ 確定頁面", key="confirm_pages") and pages and len(pages) <= MAX_PAGES:
-        st.session_state.selected_pages = sorted(set(map(int, pages)))
-        st.success(f"已選擇頁面: {st.session_state.selected_pages}")
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.success(f"已選擇頁面: {st.session_state.selected_pages}")
+        with col2:
+            if st.button("🔄 重新選擇 PDF 頁面", key="reset_pages_btn"):
+                st.session_state.selected_pages = None
+                st.experimental_rerun()
 
 
 def build_sub_pdf(uploaded, pages):
