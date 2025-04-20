@@ -157,10 +157,12 @@ def get_pdf_page_count(uploaded):
 
 def select_pdf_pages(pdf_file):
     """顯示頁面選擇 UI，並把結果寫入 session_state.selected_pages"""
+    # 如果已經選擇頁面，顯示目前選擇和重選按鈕
     if st.session_state.selected_pages is not None:
+        st.success(f"已選擇頁面: {st.session_state.selected_pages}")
         if st.button("🔄 重新選擇 PDF 頁面", key="select_page_reset_btn"):
             st.session_state.selected_pages = None
-            st.stop()
+        return
 
     total = get_pdf_page_count(pdf_file)
     st.session_state.total_pages = total
