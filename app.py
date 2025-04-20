@@ -158,7 +158,7 @@ def get_pdf_page_count(uploaded):
 def select_pdf_pages(pdf_file):
     """顯示頁面選擇 UI，並把結果寫入 session_state.selected_pages"""
     if st.session_state.selected_pages is not None:
-        if st.button("🔄 重新選擇 PDF 頁面", key="select_page_reset_btn"):  # Changed key
+        if st.button("🔄 重新選擇 PDF 頁面", key="select_page_reset_btn"):
             st.session_state.selected_pages = None
             st.stop()
 
@@ -233,11 +233,6 @@ start_btn_disabled = not (
 if st.session_state.uploaded_pdf:
     select_pdf_pages(st.session_state.uploaded_pdf)
 
-    if st.session_state.selected_pages is not None:
-        if st.button("🔄 重新選擇 PDF 頁面", key="main_flow_reset_btn"):  # Changed key
-            st.session_state.selected_pages = None
-            st.experimental_rerun()
-
 st.markdown("---")
 
 # 使用 start_btn_disabled
@@ -287,11 +282,6 @@ if st.button("🚀 開始比對", use_container_width=True, disabled=start_btn_d
     
     # 比對完成後設置狀態
     st.session_state.comparison_done = True
-
-    # 比對結果最上方重選
-    if st.button("🔄 重新選擇 PDF 頁面", key="comparison_top_reset_btn"):  # Changed key
-        st.session_state.selected_pages = None
-        st.experimental_rerun()
         
     # 顯示每一頁結果
     for p in st.session_state.selected_pages:
@@ -301,8 +291,3 @@ if st.button("🚀 開始比對", use_container_width=True, disabled=start_btn_d
         except Exception as e:
             st.error(f"無法顯示頁面 {p} 圖像：{e}")
         # … match table & expander …
-
-    # 比對結果最下方重選
-    if st.button("🔄 重新選擇 PDF 頁面", key="comparison_bottom_reset_btn"):  # Changed key
-        st.session_state.selected_pages = None
-        st.experimental_rerun()
