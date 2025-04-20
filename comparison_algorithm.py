@@ -21,6 +21,23 @@ def _normalize(text:str)->str:
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
+def _preprocess(text: str, ignore_options: dict = None) -> str:
+    """文本預處理通用函數"""
+    if ignore_options is None:
+        ignore_options = dict(ignore_space=True, ignore_punctuation=True,
+                            ignore_case=True, ignore_newline=True)
+    
+    text = _normalize(text)
+    if ignore_options.get('ignore_newline', True):
+        text = text.replace('\n', ' ')
+    if ignore_options.get('ignore_space', True):
+        text = re.sub(r'\s+', ' ', text)
+    if ignore_options.get('ignore_case', True):
+        text = text.lower()
+    if ignore_options.get('ignore_punctuation', True):
+        text = re.sub(r'[^\w\s]', '', text)
+    return text.strip()
+
 def exact_matching(t1:str, t2:str,
                    ignore_space=True, ignore_punctuation=True, ignore_case=True)->float:
     if ignore_space:
@@ -65,7 +82,7 @@ def _diff_html(a:str, b:str)->str:
             buf.append(f'<span class="diff-added">{html.escape(s[2:])}</span>')
     return ''.join(buf)
 
-def merge_word_paragraphs(paragraphs: list, max_distance: int = 3) -> list:
+def merge_word_paragraphs(paragraphs: list, max_distance: int = 3, ignore_options: dict = None) -> list:
     """合併鄰近的 Word 段落以支援多段對一組合"""
     merged = []
     n = len(paragraphs)
@@ -76,10 +93,10 @@ def merge_word_paragraphs(paragraphs: list, max_distance: int = 3) -> list:
         merged.append({
             'content': current['content'],
             'indices': [current['index']],
-            'processed': current['processed']
+            'processed': current['processed']  # 使用已處理的文本
         })
         
-        # 嘗試與後續段落組合（最多合併 max_distance 個段落）
+        # 嘗試與後續段落組合
         combined_text = current['content']
         indices = [current['index']]
         
@@ -91,7 +108,7 @@ def merge_word_paragraphs(paragraphs: list, max_distance: int = 3) -> list:
             merged.append({
                 'content': combined_text,
                 'indices': indices.copy(),
-                'processed': preprocess(combined_text)
+                'processed': _preprocess(combined_text, ignore_options)
             })
     
     return merged
@@ -104,27 +121,17 @@ def compare_pdf_first(word_data: dict, pdf_data: dict,
     """改進的比對算法，支援多段對一頁比對"""
     if ignore_options is None:
         ignore_options = dict(ignore_space=True, ignore_punctuation=True,
-                              ignore_case=True, ignore_newline=True)
+                            ignore_case=True, ignore_newline=True)
 
-    def preprocess(t:str)->str:
-        t=_normalize(t)
-        if ignore_options.get('ignore_newline', True):
-            t=t.replace('\n',' ')
-        if ignore_options.get('ignore_space', True):
-            t=re.sub(r'\s+',' ', t)
-        if ignore_options.get('ignore_case', True):
-            t=t.lower()
-        if ignore_options.get('ignore_punctuation', True):
-            t=re.sub(r'[^\w\s]','', t)
-        return t.strip()
-
+    # 預處理所有段落
     for p in pdf_data['paragraphs']:
-        p['processed']=preprocess(p['content'])
+        p['processed'] = _preprocess(p['content'], ignore_options)
     for p in word_data['paragraphs']:
-        p['processed']=preprocess(p['content'])
+        p['processed'] = _preprocess(p['content'], ignore_options)
 
     # 生成 Word 段落的各種組合
-    word_combinations = merge_word_paragraphs(word_data['paragraphs'])
+    word_combinations = merge_word_paragraphs(word_data['paragraphs'], 
+                                           ignore_options=ignore_options)
     
     matches = []
     used_word_indices = set()
