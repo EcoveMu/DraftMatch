@@ -5,10 +5,11 @@ from typing import List, Dict, Any, Optional
 from difflib import SequenceMatcher
 
 try:
+    import torch
     from sentence_transformers import SentenceTransformer
     _st_model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
     _SENTENCE_MODEL = True
-except ImportError:
+except (ImportError, RuntimeError):
     _st_model = None
     _SENTENCE_MODEL = False
 
@@ -171,23 +172,22 @@ def compare_sentences(word_sents: List[Dict[str, Any]],
 
 def create_diff_html(text1: str, text2: str) -> str:
     """生成差異的 HTML 標記，支援中文字符。"""
-    # 將文本分割為字符列表（考慮中文）
     def split_text(text):
         return [c for c in text]
     
-    d = difflib.Differ()
-    diff = list(d.compare(split_text(text1), split_text(text2)))
+    differ = difflib.Differ()
+    diff = list(differ.compare(split_text(text1), split_text(text2)))
     
-    html = []
+    html_parts = []
     for char in diff:
         if char.startswith('+ '):
-            html.append(f'<span style="background-color:#e6ffe6">{char[2:]}</span>')
+            html_parts.append(f'<span style="background-color:#e6ffe6">{char[2:]}</span>')
         elif char.startswith('- '):
-            html.append(f'<span style="background-color:#ffe6e6">{char[2:]}</span>')
+            html_parts.append(f'<span style="background-color:#ffe6e6">{char[2:]}</span>')
         elif char.startswith('  '):
-            html.append(char[2:])
+            html_parts.append(char[2:])
     
-    return ''.join(html)
+    return ''.join(html_parts)
 
 def create_sentence_hash(sentence: str) -> str:
     """創建句子的簡單雜湊值用於快速比對"""

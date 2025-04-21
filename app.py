@@ -6,6 +6,14 @@ from pathlib import Path
 import fitz                     # PyMuPDF
 import pandas as pd
 import docx, difflib
+import asyncio
+import nest_asyncio
+
+# Add these lines at the beginning of the file, after imports
+try:
+    nest_asyncio.apply()
+except Exception:
+    pass
 
 from text_extraction import (
     extract_text_from_word,
