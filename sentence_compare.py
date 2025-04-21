@@ -1,6 +1,16 @@
 import re
+import difflib
+import numpy as np
 from typing import List, Dict, Any, Optional
 from difflib import SequenceMatcher
+
+try:
+    from sentence_transformers import SentenceTransformer
+    _st_model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+    _SENTENCE_MODEL = True
+except ImportError:
+    _st_model = None
+    _SENTENCE_MODEL = False
 
 def split_into_sentences(text: str) -> list:
     """將文本拆分為句子列表。"""
@@ -58,13 +68,24 @@ def prepare_sentences(pdf_data: Dict[str, Any], word_data: Dict[str, Any],
             
     return pdf_sentences, word_sentences
 
+def semantic_sentence_matching(text1: str, text2: str) -> float:
+    """使用向量模型計算語意相似度"""
+    if _SENTENCE_MODEL:
+        embeddings = _st_model.encode([text1, text2])
+        similarity = np.dot(embeddings[0], embeddings[1]) / (
+            np.linalg.norm(embeddings[0]) * np.linalg.norm(embeddings[1])
+        )
+        return float(similarity)
+    return SequenceMatcher(None, text1, text2).ratio()
+
 def compare_sentences(word_sents: List[Dict[str, Any]], 
                      pdf_sents: List[Dict[str, Any]], 
                      comparison_mode: str = 'semantic',
                      similarity_threshold: float = 0.6,
                      ignore_options: Optional[Dict[str, bool]] = None,
-                     ai_instance: Any = None) -> Dict[str, Any]:
-    """句子級別的比對。"""
+                     ai_instance: Any = None,
+                     progress_callback: Optional[callable] = None) -> Dict[str, Any]:
+    """句子級別的比對，支援進度回調。"""
     if ignore_options is None:
         ignore_options = {
             "ignore_space": True,
@@ -76,7 +97,11 @@ def compare_sentences(word_sents: List[Dict[str, Any]],
     matches = []
     used_word_idx = set()
     
-    for pdf_sent in pdf_sents:
+    total = len(pdf_sents)
+    for i, pdf_sent in enumerate(pdf_sents):
+        if progress_callback:
+            progress_callback(i / total)
+            
         best_match = None
         best_sim = 0.0
         best_word_indices = []
@@ -95,10 +120,10 @@ def compare_sentences(word_sents: List[Dict[str, Any]],
                                       ws['processed'])
                 )
             elif comparison_mode == 'semantic':
-                # TODO: 實現語意比對
-                sim = SequenceMatcher(None, 
-                                    pdf_sent['processed'],
-                                    ws['processed']).ratio()
+                sim = semantic_sentence_matching(
+                    pdf_sent['processed'],
+                    ws['processed']
+                )
             elif comparison_mode == 'ai' and ai_instance:
                 sim, _ = ai_instance.semantic_comparison(
                     pdf_sent['content'],
@@ -125,6 +150,9 @@ def compare_sentences(word_sents: List[Dict[str, Any]],
                                             pdf_sent["content"])
             })
     
+    if progress_callback:
+        progress_callback(1.0)
+    
     # 收集未匹配句子
     unmatched_pdf = [
         s for s in pdf_sents 
@@ -142,18 +170,24 @@ def compare_sentences(word_sents: List[Dict[str, Any]],
     }
 
 def create_diff_html(text1: str, text2: str) -> str:
-    """生成差異的 HTML 標記。"""
+    """生成差異的 HTML 標記，支援中文字符。"""
+    # 將文本分割為字符列表（考慮中文）
+    def split_text(text):
+        return [c for c in text]
+    
     d = difflib.Differ()
-    diff = list(d.compare(text1.split(), text2.split()))
+    diff = list(d.compare(split_text(text1), split_text(text2)))
+    
     html = []
-    for word in diff:
-        if word.startswith('+ '):
-            html.append(f'<span style="color:green">{word[2:]}</span>')
-        elif word.startswith('- '):
-            html.append(f'<span style="color:red">{word[2:]}</span>')
-        elif word.startswith('  '):
-            html.append(word[2:])
-    return ' '.join(html)
+    for char in diff:
+        if char.startswith('+ '):
+            html.append(f'<span style="background-color:#e6ffe6">{char[2:]}</span>')
+        elif char.startswith('- '):
+            html.append(f'<span style="background-color:#ffe6e6">{char[2:]}</span>')
+        elif char.startswith('  '):
+            html.append(char[2:])
+    
+    return ''.join(html)
 
 def create_sentence_hash(sentence: str) -> str:
     """創建句子的簡單雜湊值用於快速比對"""

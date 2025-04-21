@@ -356,6 +356,11 @@ def main():
     st.markdown("---")
 
     if st.button("🚀 開始比對", use_container_width=True, disabled=start_btn_disabled, key="start_compare"):
+        progress_bar = st.progress(0)
+        
+        def update_progress(progress):
+            progress_bar.progress(progress)
+        
         with st.spinner("正在進行文件比對..."):
             word_file = st.session_state.uploaded_word
             pdf_file = st.session_state.uploaded_pdf
@@ -416,7 +421,8 @@ def main():
                     "ignore_case": st.session_state.ignore_case,
                     "ignore_newline": st.session_state.ignore_linebreaks,
                 },
-                ai_instance=ai_instance
+                ai_instance=ai_instance,
+                progress_callback=update_progress
             )
 
             # 2. 執行表格比對
