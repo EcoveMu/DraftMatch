@@ -25,7 +25,7 @@ from comparison_algorithm import compare_pdf_first
 from custom_ai import CustomAI
 from table_compare import compare_tables
 from table_viz import display_table_comparison
-from sentence_compare import prepare_sentences, compare_sentences
+from sentence_compare import prepare_sentences, compare_sentences, split_into_sentences
 
 ###############################################################################
 # --------------------------- 基本設定 ---------------------------------------
@@ -181,7 +181,7 @@ def select_pdf_pages(pdf_file):
     if total <= MAX_PAGES:
         st.info(f"PDF 共 {total} 頁，將全數比對。")
         pages = list(range(1, total + 1))
-        if st.button("✅ 碯定頁面", key="confirm_all_pages"):
+        if st.button("✅ 確定頁面", key="confirm_all_pages"):
             st.session_state.selected_pages = pages
             col1, col2 = st.columns([3, 1])
             with col1:
@@ -212,7 +212,7 @@ def select_pdf_pages(pdf_file):
         else:
             pages = st.multiselect("選擇頁碼", list(range(1, total + 1)), key="manual_pages")
 
-        if st.button("✅ 碯定頁面", key="confirm_pages") and pages and len(pages) <= MAX_PAGES:
+        if st.button("✅ 確定頁面", key="confirm_pages") and pages and len(pages) <= MAX_PAGES:
             st.session_state.selected_pages = sorted(set(map(int, pages)))
             col1, col2 = st.columns([3, 1])
             with col1:
@@ -305,15 +305,27 @@ def display_comparison_results(results, pdf_bytes, word_data, pdf_data):
         # 如果開啟調試資訊，顯示詳細資訊
         if st.session_state.debug_info:
             with st.expander("調試資訊", expanded=True):
+                # 計算總句子數
+                word_sentences = sum(
+                    len(split_into_sentences(p["content"]))
+                    for p in word_data["paragraphs"]
+                    if p.get("content")
+                )
+                pdf_sentences = sum(
+                    len(split_into_sentences(p["content"]))
+                    for p in pdf_data["paragraphs"]
+                    if p.get("content")
+                )
+                
                 st.write("Word 文件統計：", {
                     "段落數": len(word_data["paragraphs"]),
                     "表格數": len(word_data.get("tables", [])),
-                    "句子數": len([s for p in word_data["paragraphs"] for s in split_into_sentences(p["content"])])
+                    "句子數": word_sentences
                 })
                 st.write("PDF 文件統計：", {
                     "段落數": len(pdf_data["paragraphs"]),
                     "表格數": len(pdf_data.get("tables", [])),
-                    "句子數": len([s for p in pdf_data["paragraphs"] for s in split_into_sentences(p["content"])])
+                    "句子數": pdf_sentences
                 })
                 st.write("比對結果統計：", {
                     "文字匹配數": len(results.get("matches", [])),
