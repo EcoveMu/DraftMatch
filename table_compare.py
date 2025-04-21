@@ -32,11 +32,17 @@ def normalize_number(s: str) -> str:
 
 def find_best_match(target: str, candidates: List[str], threshold: float = 0.8) -> Optional[str]:
     """找出最佳匹配的字串。"""
+    if not target or not candidates:  # 增加空值檢查
+        return None
+        
     best_match = None
     best_ratio = 0
     
     for candidate in candidates:
-        ratio = SequenceMatcher(None, target, candidate).ratio()
+        if not candidate:  # 跳過空值
+            continue
+            
+        ratio = SequenceMatcher(None, str(target), str(candidate)).ratio()  # 確保轉換為字串
         if ratio > best_ratio and ratio >= threshold:
             best_ratio = ratio
             best_match = candidate
@@ -45,14 +51,33 @@ def find_best_match(target: str, candidates: List[str], threshold: float = 0.8) 
 
 def align_columns(pdf_table: Dict[str, Any], word_table: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     """對齊表格欄位，返回欄位映射和差異資訊。"""
-    pdf_headers = pdf_table["data"][0] if pdf_table["data"] else []
-    word_headers = word_table["data"][0] if word_table["data"] else []
+    # 確保資料存在且非空
+    if not pdf_table or not word_table:
+        return {
+            "column_mapping": {},
+            "name_differences": [],
+            "order_different": False
+        }
+        
+    # 獲取表頭並進行空值檢查
+    pdf_headers = pdf_table.get("data", [[]])[0] if pdf_table.get("data") else []
+    word_headers = word_table.get("data", [[]])[0] if word_table.get("data") else []
+    
+    if not pdf_headers or not word_headers:
+        return {
+            "column_mapping": {},
+            "name_differences": [],
+            "order_different": False
+        }
     
     mapping = {}
     col_name_diffs = []
     
     # 建立欄位映射
     for pdf_col in pdf_headers:
+        if not pdf_col:  # 跳過空值
+            continue
+            
         # 先嘗試完全匹配
         if pdf_col in word_headers:
             mapping[pdf_col] = pdf_col
@@ -64,7 +89,8 @@ def align_columns(pdf_table: Dict[str, Any], word_table: Dict[str, Any]) -> Dict
                 col_name_diffs.append((pdf_col, match))
     
     # 檢查欄位順序差異
-    col_order_diff = pdf_headers != [mapping.get(pc) for pc in pdf_headers]
+    mapped_headers = [mapping.get(pc) for pc in pdf_headers if pc in mapping]
+    col_order_diff = mapped_headers != [h for h in word_headers if h in mapped_headers]
     
     return {
         "column_mapping": mapping,
@@ -74,13 +100,40 @@ def align_columns(pdf_table: Dict[str, Any], word_table: Dict[str, Any]) -> Dict
 
 def diff_table(word_table: Dict[str, Any], pdf_table: Dict[str, Any]) -> Dict[str, Any]:
     """計算兩個表格的詳細差異。"""
+    # 空值檢查
+    if not word_table or not pdf_table:
+        return {
+            "column_alignment": {
+                "column_mapping": {},
+                "name_differences": [],
+                "order_different": False
+            },
+            "cell_differences": [],
+            "row_similarities": []
+        }
+    
+    # 確保表格數據存在
+    word_data = word_table.get("data", [])
+    pdf_data = pdf_table.get("data", [])
+    
+    if not word_data or not pdf_data:
+        return {
+            "column_alignment": {
+                "column_mapping": {},
+                "name_differences": [],
+                "order_different": False
+            },
+            "cell_differences": [],
+            "row_similarities": []
+        }
+    
     alignment = align_columns(pdf_table, word_table)
     cell_differences = []
     row_similarities = []
     
     # 跳過表頭行
-    pdf_data = pdf_table["data"][1:] if pdf_table["data"] else []
-    word_data = word_table["data"][1:] if word_table["data"] else []
+    pdf_data = pdf_data[1:]
+    word_data = word_data[1:]
     
     # 比較每一行
     for row_idx, (pdf_row, word_row) in enumerate(zip(pdf_data, word_data)):
@@ -168,16 +221,26 @@ def compare_tables(word_tables: List[Dict[str, Any]],
                   pdf_tables: List[Dict[str, Any]], 
                   similarity_threshold: float = 0.8) -> List[Dict[str, Any]]:
     """比對 Word 與 PDF 的表格列表，傳回比對差異結果列表。"""
+    # 空值檢查
+    if not word_tables or not pdf_tables:
+        return []
+        
     table_matches = []
     used_word_indices = set()
     
     for pdf_table in pdf_tables:
+        if not pdf_table:  # 跳過空值
+            continue
+            
         best_match = None
         best_sim = 0.0
         best_match_diff = None
         
         for word_table in word_tables:
-            if word_table["index"] in used_word_indices:
+            if not word_table:  # 跳過空值
+                continue
+                
+            if word_table.get("index") in used_word_indices:
                 continue
                 
             sim = table_similarity(word_table, pdf_table)
@@ -187,12 +250,12 @@ def compare_tables(word_tables: List[Dict[str, Any]],
                 best_match_diff = diff_table(word_table, pdf_table)
                 
         if best_match:
-            used_word_indices.add(best_match["index"])
+            used_word_indices.add(best_match.get("index"))
             table_matches.append({
                 "pdf_page": pdf_table.get("page"),
-                "pdf_index": pdf_table["index"],
+                "pdf_index": pdf_table.get("index"),
                 "pdf_title": pdf_table.get("title", ""),
-                "word_index": best_match["index"],
+                "word_index": best_match.get("index"),
                 "word_page": best_match.get("page"),
                 "word_title": best_match.get("title", ""),
                 "similarity": best_sim,
