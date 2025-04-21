@@ -26,10 +26,39 @@ def get_sentence_model():
 
 def split_into_sentences(text: str) -> list:
     """將文本拆分為句子列表。"""
-    # 中英文標點符號的斷句模式
-    pattern = r'(?<=[。．！!？?]|\.")\s*'
-    sentences = re.split(pattern, text)
-    return [s.strip() for s in sentences if s.strip()]
+    # 修改分句模式，避免使用變長的 look-behind
+    if not text:
+        return []
+        
+    # 先分割中文標點
+    chinese_pattern = r'([。！？；])'
+    parts = re.split(chinese_pattern, text)
+    
+    # 合併標點與前面的文字
+    sentences = []
+    current = ''
+    for part in parts:
+        current += part
+        if part in '。！？；':
+            if current.strip():
+                sentences.append(current.strip())
+            current = ''
+            
+    # 處理英文句點
+    if current.strip():
+        eng_parts = re.split(r'(\.\s)', current)
+        current = ''
+        for part in eng_parts:
+            current += part
+            if part.endswith('. '):
+                if current.strip():
+                    sentences.append(current.strip())
+                current = ''
+        if current.strip():
+            sentences.append(current.strip())
+    
+    # 過濾空句子
+    return [s for s in sentences if s.strip()]
 
 def _preprocess(text: str, ignore_options: Dict[str, bool]) -> str:
     """預處理文本，根據忽略選項進行調整。"""
