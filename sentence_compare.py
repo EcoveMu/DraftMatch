@@ -6,12 +6,23 @@ from difflib import SequenceMatcher
 
 try:
     import torch
-    from sentence_transformers import SentenceTransformer
-    _st_model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
     _SENTENCE_MODEL = True
 except (ImportError, RuntimeError):
-    _st_model = None
     _SENTENCE_MODEL = False
+
+# 延遲加載模型
+_st_model = None
+
+def get_sentence_model():
+    global _st_model
+    if _st_model is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+            _st_model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+            return _st_model
+        except (ImportError, RuntimeError):
+            return None
+    return _st_model
 
 def split_into_sentences(text: str) -> list:
     """將文本拆分為句子列表。"""
@@ -71,12 +82,17 @@ def prepare_sentences(pdf_data: Dict[str, Any], word_data: Dict[str, Any],
 
 def semantic_sentence_matching(text1: str, text2: str) -> float:
     """使用向量模型計算語意相似度"""
-    if _SENTENCE_MODEL:
-        embeddings = _st_model.encode([text1, text2])
-        similarity = np.dot(embeddings[0], embeddings[1]) / (
-            np.linalg.norm(embeddings[0]) * np.linalg.norm(embeddings[1])
-        )
-        return float(similarity)
+    model = get_sentence_model()
+    if model:
+        try:
+            embeddings = model.encode([text1, text2])
+            similarity = np.dot(embeddings[0], embeddings[1]) / (
+                np.linalg.norm(embeddings[0]) * np.linalg.norm(embeddings[1])
+            )
+            return float(similarity)
+        except Exception:
+            # 如果模型出錯，退回到基本比對
+            return SequenceMatcher(None, text1, text2).ratio()
     return SequenceMatcher(None, text1, text2).ratio()
 
 def compare_sentences(word_sents: List[Dict[str, Any]], 

@@ -10,3 +10,4 @@ easyocr==1.7.1
 tabula-py==2.9.0
 pdfplumber>=0.7.0
 pytesseract==0.3.10
+nest-asyncio>=1.5.0

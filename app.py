@@ -6,10 +6,11 @@ from pathlib import Path
 import fitz                     # PyMuPDF
 import pandas as pd
 import docx, difflib
+
 import asyncio
 import nest_asyncio
 
-# Add these lines at the beginning of the file, after imports
+# 簡化異步處理初始化
 try:
     nest_asyncio.apply()
 except Exception:
@@ -477,13 +478,6 @@ def main():
                             "表格數": len(pdf_data["tables"]),
                             "句子數": len(pdf_sentences)
                         })
-    except RuntimeError as e:
-        if "no running event loop" in str(e):
-            asyncio.set_event_loop(asyncio.new_event_loop())
-            main()  # Retry
-        else:
-            st.error(f"執行時發生錯誤：{str(e)}")
-            st.exception(e)
     except Exception as e:
         st.error(f"執行時發生錯誤：{str(e)}")
         st.exception(e)
