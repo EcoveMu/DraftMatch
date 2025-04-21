@@ -13,6 +13,9 @@ from text_extraction import (
 )
 from comparison_algorithm import compare_pdf_first
 from custom_ai import CustomAI
+from table_compare import compare_tables
+from table_viz import display_table_comparison
+from sentence_compare import prepare_sentences, compare_sentences
 
 ###############################################################################
 # --------------------------- 基本設定 ---------------------------------------
@@ -236,132 +239,194 @@ def pdf_page_image(pdf_bytes, page, zoom=0.8):
         return pix.tobytes("png")
 
 def display_matches(matches, page_number):
+    """顯示句子匹配結果表格。"""
     df = pd.DataFrame({
-        'PDF 文本': [m['pdf_text'] for m in matches],
-        'Word 文本': [m['word_text'] for m in matches],
+        'PDF 句子': [m['pdf_text'] for m in matches],
+        'Word 對應句子': [m['word_text'] for m in matches],
         'Word 段落編號': [', '.join(map(str, m['word_indices'])) for m in matches],
+        'Word 頁碼': [m.get('word_page', "") for m in matches],
         '相似度': [f"{m['similarity']:.2%}" for m in matches]
     })
     st.dataframe(df, use_container_width=True)
+
+def display_text_comparison(matches, page, results):
+    """顯示文字比對結果"""
+    if matches:
+        display_matches(matches, page)
+        with st.expander("查看文字差異詳細"):
+            for m in matches:
+                st.markdown(f"**相似度: {m['similarity']:.2%}**")
+                st.markdown(m["diff_html"], unsafe_allow_html=True)
+                st.divider()
+    else:
+        st.info("本頁沒有文字內容差異或匹配結果。")
+    
+    # 顯示未匹配段落
+    page_unmatched = [
+        para for para in results["unmatched_pdf"] 
+        if para["page"] == page
+    ]
+    if page_unmatched:
+        with st.expander("未匹配的段落"):
+            for para in page_unmatched:
+                st.markdown(f"- {para['content']}")
+
+def display_comparison_results(results, pdf_bytes, word_data, pdf_data):
+    """顯示比對結果"""
+    # 新增篩選控制
+    with st.sidebar:
+        st.subheader("🔍 結果篩選")
+        min_similarity = st.slider(
+            "最低相似度顯示", 
+            0.0, 1.0, 0.0, 0.1,
+            help="只顯示相似度高於此值的結果"
+        )
+        show_only_differences = st.checkbox(
+            "只顯示有差異的內容",
+            help="勾選後僅顯示不完全相同的比對結果"
+        )
+    
+    selected_pages = st.multiselect(
+        "選擇要查看的頁面", 
+        range(1, results["total_pages"] + 1),
+        default=[1]
+    )
+    
+    for p in selected_pages:
+        st.subheader(f"PDF 第 {p} 頁")
+        st.image(pdf_page_image(pdf_bytes, p), use_container_width=True)
+        
+        # 篩選本頁的文字和表格比對結果
+        page_text_matches = [
+            m for m in results["matches"] 
+            if m["pdf_page"] == p
+        ]
+        page_table_matches = [
+            t for t in results["table_matches"] 
+            if t["pdf_page"] == p
+        ]
+        
+        # 建立頁籤
+        tab1, tab2 = st.tabs(["文字比對結果", "表格比對結果"])
+        
+        # 文字比對頁籤
+        with tab1:
+            filtered_matches = [
+                m for m in page_text_matches 
+                if m['similarity'] >= min_similarity and 
+                (not show_only_differences or m['similarity'] < 1.0)
+            ]
+            display_text_comparison(filtered_matches, p, results)
+            
+        # 表格比對頁籤
+        with tab2:
+            if page_table_matches:
+                filtered_tables = [
+                    t for t in page_table_matches
+                    if t['similarity'] >= min_similarity and
+                    (not show_only_differences or t['similarity'] < 1.0)
+                ]
+                for table_match in filtered_tables:
+                    display_table_comparison(table_match, pdf_data, word_data)
+                    st.divider()
+            else:
+                st.info("本頁沒有表格或未找到對應的表格差異。")
+        
+        st.markdown("---")
 
 ###############################################################################
 # ------------------------------ 主流程 UI -----------------------------------
 ###############################################################################
 
-# 定義 start_btn_disabled
-start_btn_disabled = not (
-    st.session_state.uploaded_word and 
-    st.session_state.uploaded_pdf and 
-    st.session_state.selected_pages
-)
-
-# 處理PDF頁面選擇
-if st.session_state.uploaded_pdf:
-    select_pdf_pages(st.session_state.uploaded_pdf)
-
-st.markdown("---")
-
-# 使用 start_btn_disabled
-if st.button("🚀 開始比對", use_container_width=True, disabled=start_btn_disabled, key="start_compare"):
-    word_file = st.session_state.uploaded_word
-    pdf_file = st.session_state.uploaded_pdf
-
-    total_pages = get_pdf_page_count(pdf_file)
-    pages = st.session_state.selected_pages
-
-    # 組裝子 PDF：若PDF頁數過多則建立僅包含選定頁面的子PDF
-    sub_pdf = build_sub_pdf(pdf_file, pages) if total_pages > MAX_PAGES else io.BytesIO(pdf_file.read())
-    sub_pdf.seek(0)
-
-    # 定義 pdf_bytes
-    pdf_bytes = sub_pdf.getvalue()
-
-    # 提取 Word 和 PDF 文本內容
-    word_data = extract_text_from_word(word_file)
-    if not isinstance(word_data, dict):
-        word_data = {'paragraphs': word_data if isinstance(word_data, list) else []}
-
-    pdf_paragraphs = extract_text_from_pdf_with_page_info(sub_pdf)
-    if not isinstance(pdf_paragraphs, list):
-        pdf_paragraphs = []
-
-    # 確保每個段落都有正確的格式
-    pdf_data = {
-        "paragraphs": [{
-            'content': p.get('content', ''),
-            'page': p.get('page', 1),
-            'index': i
-        } for i, p in enumerate(pdf_paragraphs)],
-        "tables": []
-    }
-
-    # **處理子PDF頁碼**：如果使用了子PDF，將段落中的頁碼轉換回原始PDF的頁碼
-    if total_pages > MAX_PAGES:
-        for para in pdf_data["paragraphs"]:
-            para["page"] = pages[para["page"] - 1]
-
-    # AI / OCR 實例（如使用AI輔助比對）
-    ai_instance = CustomAI() if st.session_state.use_ai else None
-
-    st.info("比對中，請稍候...")
-    res = compare_pdf_first(
-        word_data,
-        pdf_data,
-        comparison_mode=st.session_state.comparison_mode,
-        similarity_threshold=st.session_state.similarity_threshold,
-        ignore_options={
-            "ignore_space": st.session_state.ignore_whitespace,
-            "ignore_punctuation": st.session_state.ignore_punctuation,
-            "ignore_case": st.session_state.ignore_case,
-            "ignore_newline": st.session_state.ignore_linebreaks,
-        },
-        ai_instance=ai_instance,
+def main():
+    # 定義 start_btn_disabled
+    start_btn_disabled = not (
+        st.session_state.uploaded_word and 
+        st.session_state.uploaded_pdf and 
+        st.session_state.selected_pages
     )
 
-    st.success(f"完成！匹配 {res['statistics']['matched']} 段 / PDF 段 {res['statistics']['total_pdf']}")
-    
-    # 比對完成後設置狀態
-    st.session_state.comparison_done = True
-        
-    # 顯示每一頁結果
-    for p in st.session_state.selected_pages:
-        st.subheader(f"PDF 頁 {p}")
-        try:
-            st.image(pdf_page_image(pdf_bytes, p), use_container_width=True)
-        except Exception as e:
-            st.error(f"無法顯示頁面 {p} 圖像：{e}")
+    # 處理PDF頁面選擇
+    if st.session_state.uploaded_pdf:
+        select_pdf_pages(st.session_state.uploaded_pdf)
 
-        # 過濾出當前頁的比對結果
-        page_matches = [m for m in res['matches'] if m['pdf_page'] == p]
-        
-        if page_matches:
-            # 使用 display_matches 函式顯示比對結果表格
-            display_matches(page_matches, p)
-            
-            # 差異細節展開區
-            with st.expander("查看詳細差異"):
-                for m in page_matches:
-                    st.markdown(f"**相似度: {m['similarity']:.2%}**")
-                    st.markdown(m['diff_html'], unsafe_allow_html=True)
-                    st.divider()
-        else:
-            st.warning(f"本頁沒有找到匹配的內容")
-        
-        # 顯示未匹配段落
-        page_unmatched = [p for p in res['unmatched_pdf'] if p['page'] == p]
-        if page_unmatched:
-            with st.expander("未匹配段落"):
-                for um in page_unmatched:
-                    st.markdown(f"- {um['content']}")
-        
-        st.markdown("---")
+    st.markdown("---")
 
-    # 在最下方加入重選按鈕
-    st.markdown("---")  # 加入分隔線
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.success(f"已選擇頁面: {st.session_state.selected_pages}")
-    with col2:
-        if st.button("🔄 重新選擇 PDF 頁面", key="bottom_reset_btn"):
-            st.session_state.selected_pages = None
-            st.rerun()
+    # 使用 start_btn_disabled
+    if st.button("🚀 開始比對", use_container_width=True, disabled=start_btn_disabled, key="start_compare"):
+        word_file = st.session_state.uploaded_word
+        pdf_file = st.session_state.uploaded_pdf
+
+        total_pages = get_pdf_page_count(pdf_file)
+        pages = st.session_state.selected_pages
+
+        # 組裝子 PDF：若PDF頁數過多則建立僅包含選定頁面的子PDF
+        sub_pdf = build_sub_pdf(pdf_file, pages) if total_pages > MAX_PAGES else io.BytesIO(pdf_file.read())
+        sub_pdf.seek(0)
+
+        # 定義 pdf_bytes
+        pdf_bytes = sub_pdf.getvalue()
+
+        # 提取 Word 和 PDF 文本內容
+        word_data = extract_text_from_word(word_file)
+        if not isinstance(word_data, dict):
+            word_data = {'paragraphs': word_data if isinstance(word_data, list) else []}
+
+        pdf_paragraphs = extract_text_from_pdf_with_page_info(sub_pdf)
+        if not isinstance(pdf_paragraphs, list):
+            pdf_paragraphs = []
+
+        # 確保每個段落都有正確的格式
+        pdf_data = {
+            "paragraphs": [{
+                'content': p.get('content', ''),
+                'page': p.get('page', 1),
+                'index': i
+            } for i, p in enumerate(pdf_paragraphs)],
+            "tables": []
+        }
+
+        # **處理子PDF頁碼**：如果使用了子PDF，將段落中的頁碼轉換回原始PDF的頁碼
+        if total_pages > MAX_PAGES:
+            for para in pdf_data["paragraphs"]:
+                para["page"] = pages[para["page"] - 1]
+
+        # AI / OCR 實例（如使用AI輔助比對）
+        ai_instance = CustomAI() if st.session_state.use_ai else None
+
+        st.info("比對中，請稍候...")
+        
+        # 準備句子列表
+        pdf_sentences, word_sentences = prepare_sentences(
+            pdf_data,
+            word_data,
+            ignore_options={
+                "ignore_space": st.session_state.ignore_whitespace,
+                "ignore_punctuation": st.session_state.ignore_punctuation,
+                "ignore_case": st.session_state.ignore_case,
+                "ignore_newline": st.session_state.ignore_linebreaks,
+            }
+        )
+        
+        # 執行句子級比對
+        results = compare_sentences(
+            word_sentences,
+            pdf_sentences,
+            comparison_mode=st.session_state.comparison_mode,
+            similarity_threshold=st.session_state.similarity_threshold,
+            ignore_options={
+                "ignore_space": st.session_state.ignore_whitespace,
+                "ignore_punctuation": st.session_state.ignore_punctuation,
+                "ignore_case": st.session_state.ignore_case,
+                "ignore_newline": st.session_state.ignore_linebreaks,
+            },
+            ai_instance=ai_instance
+        )
+        
+        st.success(
+            f"完成！匹配 {results['statistics']['matched']} 句 / "
+            f"PDF 總句數 {results['statistics']['total_pdf']}"
+        )
+
+if __name__ == "__main__":
+    main()
