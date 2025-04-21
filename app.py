@@ -67,6 +67,11 @@ DEFAULTS = dict(
 for k, v in DEFAULTS.items():
     st.session_state.setdefault(k, v)
 
+if "debug_info" not in st.session_state:
+    st.session_state.debug_info = False
+if "comparison_done" not in st.session_state:
+    st.session_state.comparison_done = False
+
 ###############################################################################
 # ------------------------------ Sidebar -------------------------------------
 ###############################################################################
@@ -284,25 +289,45 @@ def display_text_comparison(matches, page, results):
 def display_comparison_results(results, pdf_bytes, word_data, pdf_data):
     """顯示比對結果"""
     try:
-        # 新增篩選控制
-        with st.sidebar:
-            st.subheader("🔍 結果篩選")
-            min_similarity = st.slider(
-                "最低相似度顯示", 
-                0.0, 1.0, 0.0, 0.1,
-                help="只顯示相似度高於此值的結果"
-            )
-            show_only_differences = st.checkbox(
-                "只顯示有差異的內容",
-                help="勾選後僅顯示不完全相同的比對結果"
-            )
-        
+        # 添加結果頁面的控制按鈕
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.button("重新選擇頁面"):
+                st.session_state.comparison_done = False
+                st.experimental_rerun()
+        with col2:
+            st.session_state.debug_info = st.toggle("顯示調試資訊", st.session_state.debug_info)
+        with col3:
+            if st.button("返回首頁"):
+                st.session_state.clear()
+                st.experimental_rerun()
+
+        # 如果開啟調試資訊，顯示詳細資訊
+        if st.session_state.debug_info:
+            with st.expander("調試資訊", expanded=True):
+                st.write("Word 文件統計：", {
+                    "段落數": len(word_data["paragraphs"]),
+                    "表格數": len(word_data.get("tables", [])),
+                    "句子數": len([s for p in word_data["paragraphs"] for s in split_into_sentences(p["content"])])
+                })
+                st.write("PDF 文件統計：", {
+                    "段落數": len(pdf_data["paragraphs"]),
+                    "表格數": len(pdf_data.get("tables", [])),
+                    "句子數": len([s for p in pdf_data["paragraphs"] for s in split_into_sentences(p["content"])])
+                })
+                st.write("比對結果統計：", {
+                    "文字匹配數": len(results.get("matches", [])),
+                    "表格匹配數": len(results.get("table_matches", [])),
+                    "未匹配段落數": len(results.get("unmatched_pdf", []))
+                })
+
+        # 顯示頁面選擇和比對結果
         selected_pages = st.multiselect(
-            "選擇要查看的頁面", 
-            range(1, results["total_pages"] + 1),
+            "選擇要查看的頁面",
+            range(1, results.get("total_pages", 1) + 1),
             default=[1]
         )
-        
+
         for p in selected_pages:
             st.subheader(f"PDF 第 {p} 頁")
             st.image(pdf_page_image(pdf_bytes, p), use_container_width=True)
@@ -323,8 +348,8 @@ def display_comparison_results(results, pdf_bytes, word_data, pdf_data):
                 if page_text_matches:
                     filtered_matches = [
                         m for m in page_text_matches 
-                        if m['similarity'] >= min_similarity and 
-                        (not show_only_differences or m['similarity'] < 1.0)
+                        if m['similarity'] >= 0.0 and 
+                        (not False or m['similarity'] < 1.0)
                     ]
                     display_text_comparison(filtered_matches, p, results)
                 else:
@@ -334,8 +359,8 @@ def display_comparison_results(results, pdf_bytes, word_data, pdf_data):
                 if page_table_matches:
                     filtered_tables = [
                         t for t in page_table_matches
-                        if t['similarity'] >= min_similarity and
-                        (not show_only_differences or t['similarity'] < 1.0)
+                        if t['similarity'] >= 0.0 and
+                        (not False or t['similarity'] < 1.0)
                     ]
                     for table_match in filtered_tables:
                         display_table_comparison(table_match, pdf_data, word_data)
@@ -449,35 +474,23 @@ def main():
                     "total_pages": len(pages)
                 }
 
-                # 4. 顯示比對結果
-                display_comparison_results(
-                    combined_results,
-                    pdf_bytes,
-                    word_data,
-                    pdf_data
-                )
+                # 設置比對完成狀態
+                st.session_state.comparison_done = True
+                # 保存比對結果到 session_state
+                st.session_state.comparison_results = combined_results
+                st.session_state.word_data = word_data
+                st.session_state.pdf_data = pdf_data
+                st.session_state.pdf_bytes = pdf_bytes
 
-                # 5. 顯示統計資訊
-                st.success(
-                    f"完成！\n"
-                    f"- 文字比對：匹配 {text_results['statistics']['matched']} 句 / "
-                    f"PDF 總句數 {text_results['statistics']['total_pdf']}\n"
-                    f"- 表格比對：找到 {len(table_results)} 組對應表格"
-                )
+        # 如果已完成比對，顯示結果
+        if st.session_state.comparison_done:
+            display_comparison_results(
+                st.session_state.comparison_results,
+                st.session_state.pdf_bytes,
+                st.session_state.word_data,
+                st.session_state.pdf_data
+            )
 
-                # 顯示調試資訊
-                if st.checkbox("顯示調試資訊"):
-                    with st.expander("文件內容統計"):
-                        st.write("Word 文件統計：", {
-                            "段落數": len(word_data["paragraphs"]),
-                            "表格數": len(word_data["tables"]),
-                            "句子數": len(word_sentences)
-                        })
-                        st.write("PDF 文件統計：", {
-                            "段落數": len(pdf_data["paragraphs"]),
-                            "表格數": len(pdf_data["tables"]),
-                            "句子數": len(pdf_sentences)
-                        })
     except Exception as e:
         st.error(f"執行時發生錯誤：{str(e)}")
         st.exception(e)

@@ -216,23 +216,44 @@ def compare_sentences(word_sents: List[Dict[str, Any]],
     }
 
 def create_diff_html(text1: str, text2: str) -> str:
-    """生成差異的 HTML 標記，支援中文字符。"""
+    """生成差異的 HTML 標記，支援中文字符及深淺色主題。"""
     def split_text(text):
         return [c for c in text]
     
-    differ = difflib.Differ()
-    diff = list(differ.compare(split_text(text1), split_text(text2)))
+    d = difflib.Differ()
+    diff = list(d.compare(split_text(text1), split_text(text2)))
     
-    html_parts = []
+    html = []
     for char in diff:
         if char.startswith('+ '):
-            html_parts.append(f'<span style="background-color:#e6ffe6">{char[2:]}</span>')
+            # 新增的文字：綠底黑字
+            html.append(
+                '<span style="'
+                'background-color: #90EE90;'  # 淺綠色背景
+                'color: #000000;'            # 黑色文字
+                'padding: 0 2px;'            # 加點內邊距
+                'border-radius: 2px;'        # 圓角
+                '">'
+                f'{char[2:]}'
+                '</span>'
+            )
         elif char.startswith('- '):
-            html_parts.append(f'<span style="background-color:#ffe6e6">{char[2:]}</span>')
+            # 刪除的文字：紅底黑字
+            html.append(
+                '<span style="'
+                'background-color: #FFB6C6;'  # 淺紅色背景
+                'color: #000000;'            # 黑色文字
+                'padding: 0 2px;'            # 加點內邊距
+                'border-radius: 2px;'        # 圓角
+                '">'
+                f'{char[2:]}'
+                '</span>'
+            )
         elif char.startswith('  '):
-            html_parts.append(char[2:])
+            # 未更改的文字：繼承當前主題顏色
+            html.append(char[2:])
     
-    return ''.join(html_parts)
+    return ''.join(html)
 
 def create_sentence_hash(sentence: str) -> str:
     """創建句子的簡單雜湊值用於快速比對"""
