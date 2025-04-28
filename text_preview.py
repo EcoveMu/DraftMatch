@@ -190,16 +190,21 @@ class TextPreview:
                 st.warning("Word 文件中沒有找到任何內容")
             else:
                 for para in word_content:
-                    # 根據段落類型使用不同的顯示方式
-                    if para.get('type') == 'heading':
-                        st.markdown(f"### {para['content']}")
-                    elif para.get('type') == 'toc':
+                    # 根據段落類型使用不同的顯示方式，但所有內容都會參與比對
+                    para_type = para.get('type', 'paragraph')
+                    
+                    # 顯示段落編號
+                    st.write(f"段落 {para['index'] + 1}:")
+                    
+                    # 根據類型添加標記
+                    if para_type == 'heading':
+                        st.markdown(f"**標題**: {para['content']}")
+                    elif para_type == 'toc':
                         st.markdown(f"**目錄項**: {para['content']}")
-                    elif para.get('type') == 'table_text':
+                    elif para_type == 'table_text':
                         st.markdown(f"**表格內容**:")
                         st.text_area("", para['content'], height=100, key=f"word_para_{para['index']}")
                     else:
-                        st.write(f"段落 {para['index'] + 1}:")
                         st.text_area("", para['content'], height=100, key=f"word_para_{para['index']}")
         
         with tab2:

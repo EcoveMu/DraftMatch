@@ -95,7 +95,7 @@ def main():
             if st.button("開始文字比對", key="start_text_comparison"):
                 try:
                     with st.spinner("正在進行文字比對..."):
-                        # 準備資料
+                        # 準備資料 (所有段落都參與比對，包括目錄項)
                         word_data = {'paragraphs': word_content}
                         pdf_data = {'paragraphs': pdf_content}
                         
@@ -117,7 +117,31 @@ def main():
                     # 詳細結果
                     if results['matches']:
                         for i, match in enumerate(results['matches']):
-                            with st.expander(f"匹配 #{i+1} (相似度: {match['similarity']:.2%})"):
+                            # 獲取段落類型信息
+                            word_indices = match.get('word_indices', [])
+                            word_type = None
+                            if word_indices and len(word_indices) > 0:
+                                word_index = word_indices[0]
+                                for para in word_content:
+                                    if para['index'] == word_index:
+                                        word_type = para.get('type', 'paragraph')
+                                        break
+                            
+                            # 根據段落類型設置擴展器標題
+                            expander_title = f"匹配 #{i+1} (相似度: {match['similarity']:.2%})"
+                            if word_type:
+                                type_labels = {
+                                    'heading': '標題',
+                                    'toc': '目錄項',
+                                    'table_text': '表格內容',
+                                    'metadata': '元數據',
+                                    'header': '頁眉',
+                                    'footer': '頁腳'
+                                }
+                                type_label = type_labels.get(word_type, '段落')
+                                expander_title = f"{type_label} 匹配 #{i+1} (相似度: {match['similarity']:.2%})"
+                            
+                            with st.expander(expander_title):
                                 st.write(f"PDF 頁碼: {match['pdf_page']}")
                                 
                                 c1, c2 = st.columns(2)
