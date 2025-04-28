@@ -464,6 +464,11 @@ def display_match_results(comparison_results: Dict,
                 # 處理PDF內容顯示
                 pdf_text = match.get('pdf_text', '')
                 pdf_page = match.get('pdf_page', '')
+                
+                # 處理頁碼為None的情況
+                if pdf_page is None:
+                    pdf_page = 'N/A'
+                    
                 is_pdf_directory = match.get('pdf_paragraph_type') == 'directory'
                 
                 col2.markdown(f"**PDF內容{' (目錄項目)' if is_pdf_directory else ''}:**")
@@ -507,6 +512,11 @@ def display_match_results(comparison_results: Dict,
             text = p.get('content', '')
             index = p.get('index', -1)
             page = p.get('page', -1)
+            
+            # 處理頁碼為None的情況
+            if page is None:
+                page = 'N/A'
+                
             paragraph_type = p.get('paragraph_type', 'normal')
             
             with st.expander(f"PDF段落 {index} (頁碼: {page})"):

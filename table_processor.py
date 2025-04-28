@@ -439,6 +439,11 @@ class TableProcessor:
                 is_directory = result.get('is_directory', False)
                 similarity = result['similarity']
                 
+                # 處理PDF表格頁碼
+                pdf_page = result['pdf_table'].get('page')
+                if pdf_page is None:
+                    pdf_page = 'N/A'
+                
                 with st.expander(
                     f"表格 {idx+1}: Word {result['word_table_index']+1} ↔ PDF {result['pdf_table_index']+1} "
                     f"(相似度: {similarity:.2f}) {' - 目錄表格' if is_directory else ''}"
@@ -455,7 +460,7 @@ class TableProcessor:
                     
                     # PDF 表格
                     with col2:
-                        st.markdown(f"**PDF 表格 (頁碼: {result['pdf_table']['page']}){' (目錄)' if is_directory else ''}:**")
+                        st.markdown(f"**PDF 表格 (頁碼: {pdf_page}){' (目錄)' if is_directory else ''}:**")
                         st.dataframe(
                             pd.DataFrame(result['pdf_table']['data']),
                             use_container_width=True
@@ -497,7 +502,12 @@ class TableProcessor:
             st.write("### 未匹配的 PDF 表格")
             for idx, result in enumerate(unmatched_pdf):
                 is_directory = result.get('is_directory', False)
-                with st.expander(f"PDF 表格 {result['pdf_table_index']+1} (頁碼: {result['pdf_table']['page']}){' (目錄表格)' if is_directory else ''}"):
+                # 處理PDF表格頁碼
+                pdf_page = result['pdf_table'].get('page')
+                if pdf_page is None:
+                    pdf_page = 'N/A'
+                    
+                with st.expander(f"PDF 表格 {result['pdf_table_index']+1} (頁碼: {pdf_page}){' (目錄表格)' if is_directory else ''}"):
                     st.dataframe(
                         pd.DataFrame(result['pdf_table']['data']),
                         use_container_width=True

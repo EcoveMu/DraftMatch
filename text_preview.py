@@ -99,23 +99,38 @@ class TextPreview:
             
             # 檢測是否為目錄項（目錄項通常包含...或頁碼，字體大小不同）
             is_directory = False
+            is_heading = False
             
             # 檢查是否包含典型的目錄模式（文字 + 點/空格 + 數字）
             directory_pattern = r'^.*?[\.\s]+\d+$'
             if re.match(directory_pattern, text):
                 is_directory = True
             
+            # 檢查是否為標題（通常以數字開頭，如"0.2 目錄"）
+            heading_pattern = r'^\d+(\.\d+)*\s+.*$'
+            if re.match(heading_pattern, text):
+                is_heading = True
+            
             # 如果有樣式信息，可以通過樣式進一步確認
             if hasattr(para, 'style') and para.style and para.style.name:
                 style_name = para.style.name.lower()
                 if 'toc' in style_name or 'content' in style_name:
                     is_directory = True
+                if 'heading' in style_name or 'title' in style_name:
+                    is_heading = True
             
             # 添加段落
+            paragraph_type = 'normal'
+            if is_directory:
+                paragraph_type = 'directory'
+            elif is_heading:
+                paragraph_type = 'heading'
+                
             paragraphs.append({
                 'index': i,
                 'content': text,
-                'type': 'directory' if is_directory else 'normal'
+                'type': paragraph_type,
+                'page_num': None  # Word文檔沒有頁碼概念，但添加此欄位以與PDF結構一致
             })
         
         return paragraphs
@@ -154,16 +169,31 @@ class TextPreview:
                 for i, para_text in enumerate(page_paragraphs):
                     # 檢測是否為目錄項
                     is_directory = False
+                    is_heading = False
+                    
+                    # 檢查是否包含典型的目錄模式（文字 + 點/空格 + 數字）
                     directory_pattern = r'^.*?[\.\s]+\d+$'
                     if re.match(directory_pattern, para_text):
                         is_directory = True
                     
+                    # 檢查是否為標題（通常以數字開頭，如"0.2 目錄"）
+                    heading_pattern = r'^\d+(\.\d+)*\s+.*$'
+                    if re.match(heading_pattern, para_text):
+                        is_heading = True
+                    
+                    # 決定段落類型
+                    paragraph_type = 'normal'
+                    if is_directory:
+                        paragraph_type = 'directory'
+                    elif is_heading:
+                        paragraph_type = 'heading'
+                    
                     # 添加段落
                     paragraphs.append({
-                        'page_num': page_num + 1,
+                        'page_num': page_num + 1,  # 使用物理頁碼（從1開始）
                         'content': para_text,
                         'index': len(paragraphs),
-                        'type': 'directory' if is_directory else 'normal'
+                        'type': paragraph_type
                     })
         
         # 關閉和刪除臨時文件
@@ -192,8 +222,14 @@ class TextPreview:
             word_dir_count = sum(1 for p in word_content if p.get('type') == 'directory')
             pdf_dir_count = sum(1 for p in pdf_content if p.get('type') == 'directory')
             
+            # 標題項統計
+            word_heading_count = sum(1 for p in word_content if p.get('type') == 'heading')
+            pdf_heading_count = sum(1 for p in pdf_content if p.get('type') == 'heading')
+            
             st.metric("Word目錄項", word_dir_count)
             st.metric("PDF目錄項", pdf_dir_count)
+            st.metric("Word標題項", word_heading_count)
+            st.metric("PDF標題項", pdf_heading_count)
         
         # 創建兩個標籤頁，分別顯示Word和PDF內容
         tab1, tab2 = st.tabs(["Word 內容", "PDF 內容"])
@@ -204,10 +240,19 @@ class TextPreview:
             # 創建一個DataFrame來顯示Word內容
             word_df = []
             for para in word_content:
+                # 根據段落類型設置顯示文本
+                if para.get('type') == 'directory':
+                    type_text = "目錄項"
+                elif para.get('type') == 'heading':
+                    type_text = "標題項"
+                else:
+                    type_text = "一般段落"
+                
                 word_df.append({
                     "段落索引": para.get('index', ''),
-                    "類型": "目錄項" if para.get('type') == 'directory' else "一般段落",
-                    "內容": para.get('content', '')
+                    "類型": type_text,
+                    "內容": para.get('content', ''),
+                    "頁碼": para.get('page_num', 'N/A')  # 顯示為N/A而非None
                 })
             
             # 顯示為表格
@@ -222,10 +267,23 @@ class TextPreview:
             # 創建一個DataFrame來顯示PDF內容
             pdf_df = []
             for para in pdf_content:
+                # 根據段落類型設置顯示文本
+                if para.get('type') == 'directory':
+                    type_text = "目錄項"
+                elif para.get('type') == 'heading':
+                    type_text = "標題項"
+                else:
+                    type_text = "一般段落"
+                
+                # 確保頁碼不為None
+                page_num = para.get('page_num', '')
+                if page_num is None:
+                    page_num = 'N/A'
+                
                 pdf_df.append({
-                    "頁碼": para.get('page_num', ''),
+                    "頁碼": page_num,
                     "段落索引": para.get('index', ''),
-                    "類型": "目錄項" if para.get('type') == 'directory' else "一般段落",
+                    "類型": type_text,
                     "內容": para.get('content', '')
                 })
             
