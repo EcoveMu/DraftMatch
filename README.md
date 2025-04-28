@@ -45,30 +45,20 @@ PDF 頁內的每一段文字將進行下列多層次比對：
 
 本應用支持多種 OCR 引擎，可用於從 PDF 中提取文本：
 
-1. **Tesseract OCR** - 開源 OCR 引擎，本地運行
-2. **EasyOCR** - 基於深度學習的 OCR，本地運行
-3. **OCRopus** - 基於LSTM神經網絡的OCR系統，專為研究設計
-4. **千問 OCR** - 阿里雲的 OCR 服務，提供更高精度
+1. **千問 OCR** - 阿里雲的 OCR 服務，提供最高精度，支持免費 API 和付費 API
+2. **Tesseract OCR** - 開源 OCR 引擎，本地運行
+3. **EasyOCR** - 基於深度學習的 OCR，本地運行
 
-### OCRopus 安裝
+### 千問 OCR 特點
 
-OCRopus 需要額外安裝步驟：
+千問 OCR 是本應用的首選 OCR 引擎，優勢包括：
 
-```bash
-# 基礎依賴
-pip install numpy scipy pillow
+1. **無需安裝** - 雲端 API 服務，無需本地安裝任何依賴
+2. **免費 API** - 無需密鑰即可使用免費 API
+3. **準確度高** - 特別對中文文檔有優秀表現
+4. **表格識別** - 支持表格結構識別
 
-# 安裝OCRopus (適用於Linux/Mac)
-git clone https://github.com/ocropus/ocropy.git
-cd ocropy
-pip install -e .
-
-# 下載預訓練模型
-wget -nd https://ocropus.github.io/ocropy/models/en-default.pyrnn.gz
-mv en-default.pyrnn.gz models/
-```
-
-Windows 用戶可能需要使用 WSL (Windows Subsystem for Linux) 來運行 OCRopus。
+對於 Streamlit 雲部署，強烈建議使用千問 OCR，因為其他 OCR 引擎可能因環境限制無法正常運行。
 
 ## 文件說明
 

@@ -20,21 +20,11 @@ try:
     # OCR相關庫
     import pytesseract
     TESSERACT_AVAILABLE = True
-    
-    # 檢查OCRopus是否可用
-    try:
-        import ocrolib
-        OCROPUS_AVAILABLE = True
-    except ImportError:
-        OCROPUS_AVAILABLE = False
-        
 except ImportError as e:
     st.error(f"導入錯誤: {str(e)}")
     if "pytesseract" in str(e):
         TESSERACT_AVAILABLE = False
         st.warning("Tesseract OCR 未安裝或不可用，將使用其他OCR引擎")
-    if "ocrolib" in str(e):
-        OCROPUS_AVAILABLE = False
     traceback.print_exc()
     if "text_preview" in str(e) or "table_processor" in str(e) or "comparison_algorithm" in str(e):
         st.error("核心模塊缺失，應用無法運行")
@@ -70,7 +60,6 @@ def main():
         engine_display_names = {
             "tesseract": "Tesseract OCR (本地)",
             "easyocr": "EasyOCR (本地)",
-            "ocropus": "OCRopus OCR (本地)",
             "qwen": "千問 OCR (API)"
         }
         
@@ -80,8 +69,8 @@ def main():
         # 創建可用引擎的顯示名稱列表
         available_display_names = [engine_display_names.get(name, name) for name in available_engines.keys()]
         
-        # 預設選擇第一個可用引擎
-        default_engine = next(iter(available_engines.keys())) if available_engines else "qwen"
+        # 預設選擇千問OCR
+        default_engine = "qwen" if "qwen" in available_engines else next(iter(available_engines.keys()))
         default_display = engine_display_names.get(default_engine, default_engine)
         
         # 引擎選擇
@@ -143,7 +132,7 @@ def main():
             help="PDF → Word: 在Word中查找PDF的內容\nWord → PDF: 在PDF中查找Word的內容"
         )
         
-        # 設置使用OCR和顯示比對設置
+        # 設置使用OCR
         use_ocr = st.checkbox("使用OCR處理PDF", value=True, help="使用光學字符識別(OCR)處理PDF文件中的圖像")
         
         # 顯示OCR引擎的相關說明
@@ -153,20 +142,8 @@ def main():
             
             - Tesseract: 本地開源OCR引擎，支持多種語言
             - EasyOCR: 本地深度學習OCR引擎，準確度較高
-            - OCRopus: 專為研究設計的OCR系統，基於LSTM神經網絡
-            - 千問OCR: 阿里雲的OCR服務，準確度最高但需要API密鑰
+            - 千問OCR: 阿里雲的OCR服務，準確度最高且支持免費API
             """)
-            
-            # 如果選擇了千問OCR，顯示API密鑰輸入框
-            if selected_engine == "qwen":
-                qwen_ocr = ocr_manager.get_engine_by_name("qwen")
-                qwen_api_key = st.text_input("千問API密鑰 (可選)", type="password", 
-                                             help="輸入千問API密鑰以使用官方API，留空則使用免費API")
-                if qwen_api_key:
-                    qwen_ocr.set_api_key(qwen_api_key)
-                    st.success("已設置千問API密鑰，將使用官方API")
-                else:
-                    st.info("未設置API密鑰，將使用免費API (請注意使用限制)")
     
     # 設置側邊欄
     st.sidebar.title("功能說明")
@@ -197,8 +174,11 @@ def main():
         with st.spinner("正在提取文件內容..."):
             try:
                 # OCR模式提示
-                ocr_mode = "免費API" if text_preview.ocr.should_use_free_api() else "官方API"
-                st.info(f"使用 {ocr_mode} 進行文件處理...")
+                if selected_engine == "qwen":
+                    ocr_mode = "免費API" if text_preview.ocr.should_use_free_api() else "官方API"
+                    st.info(f"使用千問OCR {ocr_mode}進行文件處理...")
+                else:
+                    st.info(f"使用{current_engine.name}進行文件處理...")
                 
                 # 提取文本和表格內容
                 word_content = text_preview.extract_word_content(word_file)

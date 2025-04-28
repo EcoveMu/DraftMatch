@@ -20,12 +20,6 @@ try:
 except ImportError:
     EASYOCR_AVAILABLE = False
 
-try:
-    import ocrolib
-    OCROPUS_AVAILABLE = True
-except ImportError:
-    OCROPUS_AVAILABLE = False
-
 class BaseOCR:
     """OCR基礎類，所有OCR引擎都繼承此類"""
     def __init__(self):
@@ -121,71 +115,6 @@ class EasyOCR(BaseOCR):
             return "\n".join(texts)
         except Exception as e:
             st.error(f"EasyOCR處理出錯: {str(e)}")
-            traceback.print_exc()
-            return ""
-
-class OCRopusOCR(BaseOCR):
-    """使用OCRopus OCR引擎提取文字"""
-    def __init__(self, lang="eng"):  # OCRopus支持的語言較少，默認為英文
-        super().__init__()
-        self.name = "OCRopus OCR"
-        self.lang = lang
-        self._available = OCROPUS_AVAILABLE
-    
-    def is_available(self):
-        """檢查OCRopus是否可用"""
-        return self._available
-    
-    def extract_text(self, image_bytes):
-        """使用OCRopus提取圖像中的文字"""
-        if not self.is_available():
-            return "OCRopus未安裝或不可用"
-        
-        try:
-            # 創建臨時目錄來保存處理文件
-            temp_dir = tempfile.mkdtemp()
-            temp_img_path = os.path.join(temp_dir, "temp_image.png")
-            
-            # 將圖像字節保存為臨時文件
-            img = Image.open(BytesIO(image_bytes))
-            img.save(temp_img_path)
-            
-            # 使用OCRopus處理圖像
-            # 1. 二值化圖像
-            os.system(f"ocropus-nlbin {temp_img_path} -o {temp_dir}/temp")
-            # 2. 分割頁面為文本行
-            os.system(f"ocropus-gpageseg {temp_dir}/temp.bin.png")
-            # 3. 識別每一行
-            model_path = f"-m {self.lang}-default" if self.lang else ""
-            os.system(f"ocropus-rpred {model_path} {temp_dir}/temp/????/??????.bin.png")
-            # 4. 將結果組合成單個文本
-            os.system(f"ocropus-hocr {temp_dir}/temp/????/??????.bin.png -o {temp_dir}/output.html")
-            
-            # 從HTML中提取文本
-            with open(f"{temp_dir}/output.html", "r", encoding="utf-8") as f:
-                html_content = f.read()
-            
-            # 使用正則表達式從hOCR中提取文本
-            text_pattern = re.compile(r'<span class="ocr_line".*?>(.*?)</span>', re.DOTALL)
-            text_matches = text_pattern.findall(html_content)
-            
-            # 清理HTML標記
-            clean_text = []
-            for match in text_matches:
-                # 移除HTML標記
-                text = re.sub(r'<.*?>', '', match)
-                clean_text.append(text.strip())
-            
-            # 組合成完整文本
-            extracted_text = "\n".join(clean_text)
-            
-            # 清理臨時文件
-            import shutil
-            shutil.rmtree(temp_dir)
-            
-            return extracted_text
-        except Exception as e:
-            st.error(f"OCRopus處理出錯: {str(e)}")
             traceback.print_exc()
             return ""
 
@@ -359,10 +288,9 @@ class OCRManager:
         self.engines = {
             "tesseract": TesseractOCR(),
             "easyocr": EasyOCR(),
-            "ocropus": OCRopusOCR(),
             "qwen": QwenOCR()
         }
-        self.current_engine_name = "tesseract"  # 默認使用Tesseract
+        self.current_engine_name = "qwen"  # 默認使用千問OCR，因為它始終可用
     
     def get_available_engines(self):
         """獲取所有可用的OCR引擎"""

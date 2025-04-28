@@ -14,8 +14,3 @@ easyocr>=1.7.1
 # 選用依賴項
 tabula-py>=2.9.0
 pdfplumber>=0.10.3
-
-# OCRopus dependencies
-ocrolib>=0.4.0
-scipy>=1.0.0
-pillow>=8.0.0
