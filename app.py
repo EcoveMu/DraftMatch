@@ -16,18 +16,9 @@ try:
 except Exception:
     pass
 
-from text_extraction import (
-    extract_text_from_word,
-    extract_text_from_pdf_with_page_info,
-    extract_text_from_pdf_with_pdfplumber,
-)
-from comparison_algorithm import compare_pdf_first
-from custom_ai import CustomAI
-from table_compare import compare_tables
-from table_viz import display_table_comparison
-from sentence_compare import prepare_sentences, compare_sentences, split_into_sentences
 from text_preview import TextPreview
 from table_processor import TableProcessor
+from comparison_algorithm import compare_pdf_first
 
 ###############################################################################
 # --------------------------- 基本設定 ---------------------------------------
