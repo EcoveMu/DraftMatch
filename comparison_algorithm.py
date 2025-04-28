@@ -7,16 +7,19 @@
 """
 from __future__ import annotations
 import difflib, re, numpy as np, unicodedata, html
-from sentence_transformers import SentenceTransformer
 from typing import List, Dict, Any, Tuple, Union
 import pandas as pd
 import streamlit as st
 
+_SENTENCE_MODEL = False
+model = None
+
 try:
+    from sentence_transformers import SentenceTransformer
     model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
     _SENTENCE_MODEL = True
 except Exception as e:
-    print(f"無法加載語義模型: {str(e)}")
+    print(f"無法加載語義模型: {str(e)}，將使用精確匹配替代")
     model = None
     _SENTENCE_MODEL = False
 
@@ -78,7 +81,7 @@ def semantic_matching(source_text: str, target_text: str) -> float:
     if not source_text or not target_text:
         return 0.0
     
-    if model is None:
+    if model is None or not _SENTENCE_MODEL:
         # 如果模型加載失敗，退回到精確匹配
         return exact_matching(source_text, target_text)
     
