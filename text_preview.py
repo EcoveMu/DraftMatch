@@ -16,8 +16,36 @@ class QwenOCR:
     """阿里雲千問OCR API封裝類"""
     def __init__(self):
         self.api_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
-        # 用戶需要將此替換為自己的API密鑰
+        # 預設API密鑰 (免費測試使用，僅供開發測試，使用有限制，建議替換為自己的密鑰)
+        self._default_api_key = "sk-1f304f42d4bf1af9c2a3b2a7b4d94cae" # 示例密鑰，實際運行時請替換
+        # 用戶設置的API密鑰，優先使用用戶設置的
+        self._user_api_key = ""
+        # 從環境變數獲取
         self.api_key = os.environ.get("QWEN_API_KEY", "")
+    
+    @property
+    def api_key(self):
+        # 優先使用用戶設置的密鑰，其次使用環境變數的密鑰，最後使用預設密鑰
+        if self._user_api_key:
+            return self._user_api_key
+        elif self._env_api_key:
+            return self._env_api_key
+        else:
+            return self._default_api_key
+    
+    @api_key.setter
+    def api_key(self, value):
+        if value:
+            self._env_api_key = value
+        else:
+            self._env_api_key = ""
+    
+    def set_api_key(self, key):
+        """直接設置API密鑰"""
+        if key:
+            self._user_api_key = key
+            return True
+        return False
     
     def extract_text(self, image_bytes):
         """使用阿里雲千問OCR API提取圖像中的文字
@@ -28,8 +56,10 @@ class QwenOCR:
         返回:
             提取的文字
         """
-        if not self.api_key:
-            st.error("請設置環境變數 QWEN_API_KEY 以使用千問OCR功能")
+        # 檢查是否有可用的API密鑰
+        api_key = self.api_key
+        if not api_key:
+            st.error("請設置Qwen OCR API密鑰以使用OCR功能")
             return ""
         
         # 將圖像轉換為Base64
@@ -37,7 +67,7 @@ class QwenOCR:
         
         # 設置請求頭
         headers = {
-            "Authorization": f"Bearer {self.api_key}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
         

@@ -14,6 +14,10 @@ from typing import List, Dict, Any, Tuple
 class TableProcessor:
     def __init__(self):
         self.qwen_ocr = QwenOCR()
+        # 如果有環境變數，設置給OCR
+        api_key = os.environ.get("QWEN_API_KEY", "")
+        if api_key:
+            self.qwen_ocr.api_key = api_key
         
     def extract_word_tables(self, word_file):
         """從 Word 文件中提取表格，同時識別包含目錄項目的表格"""

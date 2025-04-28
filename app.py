@@ -44,9 +44,14 @@ def main():
         st.write("提示: 上傳文件後，可以先查看內容預覽，確認文字提取準確性")
         st.markdown("---")
         st.header("API設置")
-        api_key = st.text_input("Qwen OCR API密鑰", type="password")
+        api_key = st.text_input("Qwen OCR API密鑰", type="password", 
+                              help="可選項：如果預設密鑰受限或不可用，請輸入您自己的API密鑰")
         if api_key:
+            # 設置環境變數
             os.environ["QWEN_API_KEY"] = api_key
+            # 直接設置到OCR物件
+            text_preview.ocr.set_api_key(api_key)
+            table_processor.qwen_ocr.set_api_key(api_key)
             st.success("API密鑰已設置")
     
     # 設置側邊欄
@@ -61,9 +66,15 @@ def main():
         step=0.05
     )
     
-    # 設置搜索方向
+    # 設置搜索方向並添加說明
+    st.sidebar.markdown("### 搜尋方向")
+    st.sidebar.info("""
+    **搜尋方向說明**:
+    - **PDF → Word**: 從PDF文件中的每個段落開始，尋找Word文件中最匹配的內容。適合檢查PDF中的內容是否存在於Word草稿中。
+    - **Word → PDF**: 從Word文件中的每個段落開始，尋找PDF文件中最匹配的內容。適合檢查Word草稿中的內容是否出現在最終PDF中。
+    """)
     search_direction = st.sidebar.radio(
-        "搜索方向",
+        "選擇搜尋方向",
         ["PDF → Word", "Word → PDF"]
     )
     
@@ -113,14 +124,18 @@ def main():
                     elif st.button("開始比對文件", type="primary"):
                         with st.spinner("正在進行文件比對..."):
                             try:
+                                # 根據搜尋方向設置參數
+                                pdf_first = search_direction == "PDF → Word"
+                                
                                 # 進行文本比對
                                 comparison_results = compare_documents(
-                                    word_content, 
-                                    pdf_content, 
+                                    word_content if not pdf_first else pdf_content,
+                                    pdf_content if not pdf_first else word_content,
                                     similarity_threshold=similarity_threshold,
                                     matching_method="hybrid"
                                 )
                                 st.session_state.comparison_results = comparison_results
+                                st.session_state.search_direction = search_direction
                                 st.success("比對完成！")
                             except Exception as e:
                                 st.error(f"比對過程中出錯: {str(e)}")
@@ -129,10 +144,13 @@ def main():
                     if hasattr(st.session_state, 'comparison_results') and st.session_state.comparison_results and display_match_results is not None:
                         with st.expander("文本比對結果", expanded=True):
                             try:
+                                # 根據搜尋方向顯示結果
+                                pdf_first = getattr(st.session_state, 'search_direction', "PDF → Word") == "PDF → Word"
+                                
                                 display_match_results(
                                     st.session_state.comparison_results,
-                                    word_content,
-                                    pdf_content,
+                                    word_content if not pdf_first else pdf_content,
+                                    pdf_content if not pdf_first else word_content,
                                     st
                                 )
                             except Exception as e:
