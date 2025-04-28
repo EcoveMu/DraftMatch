@@ -151,26 +151,33 @@ class TableProcessor:
         """顯示表格內容"""
         st.title("表格內容預覽")
         
+        # 建立側邊欄
+        with st.sidebar:
+            st.title("表格統計資訊")
+            st.write(f"Word 表格數: {len(word_tables)}")
+            st.write(f"PDF 表格數: {len(pdf_tables)}")
+        
         # 建立兩個分頁
         tab1, tab2 = st.tabs(["Word 表格", "PDF 表格"])
         
         with tab1:
             st.subheader("Word 表格內容")
-            for table in word_tables:
-                st.write(f"表格 {table['index'] + 1}:")
-                df = pd.DataFrame(table['data'])
-                st.dataframe(df, use_container_width=True)
+            if not word_tables:
+                st.warning("Word 文件中沒有找到任何表格")
+            else:
+                for table in word_tables:
+                    st.write(f"表格 {table['index'] + 1}:")
+                    df = pd.DataFrame(table['data'])
+                    st.dataframe(df, use_container_width=True, key=f"word_table_{table['index']}")
         
         with tab2:
             st.subheader("PDF 表格內容")
-            for table in pdf_tables:
-                st.write(f"頁碼 {table['page']} - 表格 {table['index'] + 1}:")
-                df = pd.DataFrame(table['data'])
-                st.dataframe(df, use_container_width=True)
-        
-        # 顯示統計資訊
-        st.sidebar.title("表格統計資訊")
-        st.sidebar.write(f"Word 表格數: {len(word_tables)}")
-        st.sidebar.write(f"PDF 表格數: {len(pdf_tables)}")
+            if not pdf_tables:
+                st.warning("PDF 文件中沒有找到任何表格")
+            else:
+                for table in pdf_tables:
+                    st.write(f"頁碼 {table['page']} - 表格 {table['index'] + 1}:")
+                    df = pd.DataFrame(table['data'])
+                    st.dataframe(df, use_container_width=True, key=f"pdf_table_{table['index']}")
         
         return word_tables, pdf_tables 

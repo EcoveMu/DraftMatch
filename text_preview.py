@@ -93,6 +93,16 @@ class TextPreview:
         """顯示內容預覽"""
         st.title("內容預覽")
         
+        # 建立側邊欄
+        with st.sidebar:
+            st.title("內容統計資訊")
+            st.write(f"Word 段落數: {len(word_content)}")
+            st.write(f"PDF 頁數: {len(pdf_content)}")
+            
+            # 如果沒有內容，提供重新提取的選項
+            if not word_content or not pdf_content:
+                return st.button("重新提取內容", key="refresh_content_btn")
+        
         # 建立兩個分頁
         tab1, tab2 = st.tabs(["Word 內容", "PDF 內容"])
         
@@ -103,7 +113,7 @@ class TextPreview:
             else:
                 for para in word_content:
                     st.write(f"段落 {para['index'] + 1}:")
-                    st.text_area("", para['content'], height=100)
+                    st.text_area("", para['content'], height=100, key=f"word_para_{para['index']}")
         
         with tab2:
             st.subheader("PDF 文件內容")
@@ -112,14 +122,6 @@ class TextPreview:
             else:
                 for para in pdf_content:
                     st.write(f"頁碼 {para['index'] + 1}:")
-                    st.text_area("", para['content'], height=100)
+                    st.text_area("", para['content'], height=100, key=f"pdf_para_{para['index']}")
         
-        # 顯示統計資訊
-        st.sidebar.title("內容統計資訊")
-        st.sidebar.write(f"Word 段落數: {len(word_content)}")
-        st.sidebar.write(f"PDF 頁數: {len(pdf_content)}")
-        
-        # 如果沒有內容，提供重新提取的選項
-        if not word_content or not pdf_content:
-            return st.sidebar.button("重新提取內容")
         return False 
