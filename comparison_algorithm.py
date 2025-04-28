@@ -1,14 +1,12 @@
 """comparison_algorithm.py  (rev‑2025‑04‑18b)
 
-優化文字比對演算法，加入更多智能比對功能：
-1. 改進段落拆分邏輯
-2. 加入上下文感知比對
-3. 優化相似度計算
-4. 加入差異摘要功能
+在 rev‑04‑18 基礎上新增 **substring_similarity**：
+若 Word 段落完整包含於 PDF 段落 (或反之)，視為高相似度，
+以「短文本長度 / 長文本長度」作為分數，可解決「多段對一頁」情境。
+其餘演算法 (exact / semantic / hybrid / ai) 保持不變。
 """
 from __future__ import annotations
 import difflib, re, numpy as np, unicodedata, html
-from typing import List, Dict, Any, Tuple
 
 try:
     from sentence_transformers import SentenceTransformer
@@ -19,7 +17,6 @@ except Exception:
     _SENTENCE_MODEL = False
 
 def _normalize(text:str)->str:
-    """文本標準化處理"""
     text = unicodedata.normalize('NFKC', text)
     text = re.sub(r'\s+', ' ', text).strip()
     return text
@@ -41,15 +38,8 @@ def _preprocess(text: str, ignore_options: dict = None) -> str:
         text = re.sub(r'[^\w\s]', '', text)
     return text.strip()
 
-def split_into_sentences(text: str) -> List[str]:
-    """將文本分割成句子"""
-    # 使用正則表達式分割句子
-    sentences = re.split(r'(?<=[。！？!?])', text)
-    return [s.strip() for s in sentences if s.strip()]
-
 def exact_matching(t1:str, t2:str,
                    ignore_space=True, ignore_punctuation=True, ignore_case=True)->float:
-    """精確比對"""
     if ignore_space:
         t1 = re.sub(r'\s+', '', t1)
         t2 = re.sub(r'\s+', '', t2)
@@ -62,19 +52,17 @@ def exact_matching(t1:str, t2:str,
     return difflib.SequenceMatcher(None, t1, t2).ratio()
 
 def semantic_matching(t1:str, t2:str)->float:
-    """語意比對"""
     if _SENTENCE_MODEL:
         emb1, emb2 = _st_model.encode([t1, t2])
         return float(np.dot(emb1, emb2)/(np.linalg.norm(emb1)*np.linalg.norm(emb2)))
     return exact_matching(t1, t2, False, False, False)
 
 def hybrid_matching(t1:str, t2:str, exact_thresh=0.85)->float:
-    """混合比對"""
     exact = exact_matching(t1, t2, True, True, True)
     return exact if exact >= exact_thresh else semantic_matching(t1, t2)
 
 def substring_similarity(a:str, b:str)->float:
-    """子字串相似度"""
+    """如果 a 包含於 b 或 b 包含於 a，則以較短長度 / 較長長度 作為分數"""
     if not a or not b: return 0.0
     if a in b:
         return len(a)/len(b)
@@ -83,7 +71,6 @@ def substring_similarity(a:str, b:str)->float:
     return 0.0
 
 def _diff_html(a:str, b:str)->str:
-    """生成差異 HTML"""
     d = difflib.ndiff(a, b)
     buf=[]
     for s in d:
@@ -105,6 +92,7 @@ def merge_word_paragraphs(paragraphs: list, max_distance: int = 3, ignore_option
     
     for i in range(n):
         current = paragraphs[i]
+        # 確保段落格式正確
         if not isinstance(current, dict) or 'content' not in current:
             continue
             
@@ -159,12 +147,10 @@ def compare_pdf_first(word_data: dict, pdf_data: dict,
     for p in pdf_data['paragraphs']:
         if isinstance(p, dict) and 'content' in p:
             p['processed'] = _preprocess(p['content'], ignore_options)
-            p['sentences'] = split_into_sentences(p['content'])
     
     for p in word_data['paragraphs']:
         if isinstance(p, dict) and 'content' in p:
             p['processed'] = _preprocess(p['content'], ignore_options)
-            p['sentences'] = split_into_sentences(p['content'])
 
     # 生成 Word 段落的各種組合
     word_combinations = merge_word_paragraphs(word_data['paragraphs'], 
@@ -197,25 +183,6 @@ def compare_pdf_first(word_data: dict, pdf_data: dict,
                 best_match = word_combo
         
         if best_match:
-            # 生成差異摘要
-            diff_summary = []
-            for pdf_sent in pdf_para['sentences']:
-                best_match_sent = None
-                best_sent_sim = 0.0
-                
-                for word_sent in best_match['sentences']:
-                    sent_sim = hybrid_matching(pdf_sent, word_sent)
-                    if sent_sim > best_sent_sim:
-                        best_sent_sim = sent_sim
-                        best_match_sent = word_sent
-                
-                if best_match_sent and best_sent_sim < 0.9:
-                    diff_summary.append({
-                        'pdf_sentence': pdf_sent,
-                        'word_sentence': best_match_sent,
-                        'similarity': best_sent_sim
-                    })
-            
             matches.append({
                 'pdf_index': pdf_para['index'],
                 'pdf_page': pdf_para.get('page'),
@@ -223,8 +190,7 @@ def compare_pdf_first(word_data: dict, pdf_data: dict,
                 'word_indices': best_match['indices'],
                 'word_text': best_match['content'],
                 'similarity': best_sim,
-                'diff_html': _diff_html(best_match['content'], pdf_para['content']),
-                'diff_summary': diff_summary
+                'diff_html': _diff_html(best_match['content'], pdf_para['content'])
             })
             used_word_indices.update(best_match['indices'])
     
