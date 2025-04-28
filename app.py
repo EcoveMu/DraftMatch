@@ -26,6 +26,8 @@ from custom_ai import CustomAI
 from table_compare import compare_tables
 from table_viz import display_table_comparison
 from sentence_compare import prepare_sentences, compare_sentences, split_into_sentences
+from text_preview import TextPreview
+from table_processor import TableProcessor
 
 ###############################################################################
 # --------------------------- 基本設定 ---------------------------------------
@@ -388,124 +390,149 @@ def display_comparison_results(results, pdf_bytes, word_data, pdf_data):
 ###############################################################################
 
 def main():
-    try:
-        # 定義 start_btn_disabled
-        start_btn_disabled = not (
-            st.session_state.uploaded_word and 
-            st.session_state.uploaded_pdf and 
-            st.session_state.selected_pages
-        )
-
-        # 處理PDF頁面選擇
-        if st.session_state.uploaded_pdf:
-            select_pdf_pages(st.session_state.uploaded_pdf)
-
-        st.markdown("---")
-
-        if st.button("🚀 開始比對", use_container_width=True, disabled=start_btn_disabled, key="start_compare"):
-            progress_bar = st.progress(0)
+    st.set_page_config(page_title="文件比對系統", layout="wide")
+    
+    # 初始化處理器
+    text_previewer = TextPreview()
+    table_processor = TableProcessor()
+    
+    st.title("文件比對系統")
+    
+    # 檔案上傳
+    col1, col2 = st.columns(2)
+    with col1:
+        word_file = st.file_uploader("上傳 Word 原稿", type=['docx'])
+    with col2:
+        pdf_file = st.file_uploader("上傳 PDF 完稿", type=['pdf'])
+    
+    if word_file and pdf_file:
+        # 儲存上傳的檔案
+        word_path = "temp_word.docx"
+        pdf_path = "temp_pdf.pdf"
+        
+        with open(word_path, "wb") as f:
+            f.write(word_file.getvalue())
+        with open(pdf_path, "wb") as f:
+            f.write(pdf_file.getvalue())
+        
+        # 提取內容
+        word_content = text_previewer.extract_word_content(word_path)
+        pdf_content = text_previewer.extract_pdf_content(pdf_path)
+        
+        # 提取表格
+        word_tables = table_processor.extract_word_tables(word_path)
+        pdf_tables = table_processor.extract_pdf_tables(pdf_path)
+        
+        # 建立分頁
+        tab1, tab2 = st.tabs(["文字比對", "表格比對"])
+        
+        with tab1:
+            # 顯示文字內容預覽
+            if text_previewer.display_content(word_content, pdf_content):
+                # 重新提取 PDF 內容
+                pdf_content = text_previewer.extract_pdf_content(pdf_path)
+                text_previewer.display_content(word_content, pdf_content)
             
-            def update_progress(progress):
-                progress_bar.progress(progress)
+            # 文字比對按鈕
+            if st.button("開始文字比對"):
+                # 準備比對資料
+                word_data = {'paragraphs': word_content}
+                pdf_data = {'paragraphs': pdf_content}
+                
+                # 執行比對
+                results = compare_pdf_first(word_data, pdf_data)
+                
+                # 顯示比對結果
+                st.title("文字比對結果")
+                
+                # 顯示統計資訊
+                st.write(f"總共比對 {results['statistics']['total_pdf']} 頁 PDF")
+                st.write(f"成功匹配 {results['statistics']['matched']} 段")
+                st.write(f"未匹配 PDF 段落: {results['statistics']['unmatched_pdf']}")
+                st.write(f"未匹配 Word 段落: {results['statistics']['unmatched_word']}")
+                
+                # 顯示詳細比對結果
+                for match in results['matches']:
+                    st.write(f"PDF 頁碼: {match['pdf_page']}")
+                    st.write(f"相似度: {match['similarity']:.2%}")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.subheader("Word 原稿")
+                        st.text_area("", match['word_text'], height=150)
+                    with col2:
+                        st.subheader("PDF 內容")
+                        st.text_area("", match['pdf_text'], height=150)
+                    
+                    st.write("差異標示:")
+                    st.markdown(match['diff_html'], unsafe_allow_html=True)
+                    
+                    # 顯示差異摘要
+                    if match.get('diff_summary'):
+                        with st.expander("差異摘要"):
+                            for diff in match['diff_summary']:
+                                st.write(f"相似度: {diff['similarity']:.2%}")
+                                st.write(f"Word: {diff['word_sentence']}")
+                                st.write(f"PDF: {diff['pdf_sentence']}")
+                                st.divider()
+                    
+                    st.divider()
+        
+        with tab2:
+            # 顯示表格內容預覽
+            word_tables, pdf_tables = table_processor.display_tables(word_tables, pdf_tables)
             
-            with st.spinner("正在進行文件比對..."):
-                word_file = st.session_state.uploaded_word
-                pdf_file = st.session_state.uploaded_pdf
-
-                total_pages = get_pdf_page_count(pdf_file)
-                pages = st.session_state.selected_pages
-
-                # 組裝子 PDF：若PDF頁數過多則建立僅包含選定頁面的子PDF
-                sub_pdf = build_sub_pdf(pdf_file, pages) if total_pages > MAX_PAGES else io.BytesIO(pdf_file.read())
-                sub_pdf.seek(0)
-
-                pdf_bytes = sub_pdf.getvalue()
-
-                # 提取 Word 和 PDF 文本內容
-                word_data = extract_text_from_word(word_file)
-                if not isinstance(word_data, dict):
-                    word_data = {
-                        'paragraphs': word_data if isinstance(word_data, list) else [],
-                        'tables': []
-                    }
-
-                # 使用 pdfplumber 提取 PDF 內容和表格
-                pdf_data = extract_text_from_pdf_with_pdfplumber(sub_pdf)
-
-                # 如果需要處理子PDF頁碼
-                if total_pages > MAX_PAGES:
-                    for para in pdf_data["paragraphs"]:
-                        para["page"] = pages[para["page"] - 1]
-                    for table in pdf_data["tables"]:
-                        table["page"] = pages[table["page"] - 1]
-
-                # AI / OCR 實例（如使用AI輔助比對）
-                ai_instance = CustomAI() if st.session_state.use_ai else None
-
-                st.info("比對中，請稍候...")
+            # 表格比對按鈕
+            if st.button("開始表格比對"):
+                st.title("表格比對結果")
                 
-                # 準備句子列表
-                pdf_sentences, word_sentences = prepare_sentences(
-                    pdf_data,
-                    word_data,
-                    ignore_options={
-                        "ignore_space": st.session_state.ignore_whitespace,
-                        "ignore_punctuation": st.session_state.ignore_punctuation,
-                        "ignore_case": st.session_state.ignore_case,
-                        "ignore_newline": st.session_state.ignore_linebreaks,
-                    }
-                )
+                # 執行表格比對
+                table_results = []
+                for word_table in word_tables:
+                    best_match = None
+                    best_similarity = 0.0
+                    
+                    for pdf_table in pdf_tables:
+                        result = table_processor.compare_tables(word_table, pdf_table)
+                        if result['similarity'] > best_similarity:
+                            best_similarity = result['similarity']
+                            best_match = result
+                    
+                    if best_match:
+                        table_results.append(best_match)
                 
-                # 1. 執行句子級比對
-                text_results = compare_sentences(
-                    word_sentences,
-                    pdf_sentences,
-                    comparison_mode=st.session_state.comparison_mode,
-                    similarity_threshold=st.session_state.similarity_threshold,
-                    ignore_options={
-                        "ignore_space": st.session_state.ignore_whitespace,
-                        "ignore_punctuation": st.session_state.ignore_punctuation,
-                        "ignore_case": st.session_state.ignore_case,
-                        "ignore_newline": st.session_state.ignore_linebreaks,
-                    },
-                    ai_instance=ai_instance,
-                    progress_callback=update_progress
-                )
-
-                # 2. 執行表格比對
-                table_results = compare_tables(
-                    word_data["tables"], 
-                    pdf_data["tables"],
-                    similarity_threshold=st.session_state.similarity_threshold
-                )
-
-                # 3. 合併結果
-                combined_results = {
-                    **text_results,
-                    "table_matches": table_results,
-                    "total_pages": len(pages)
-                }
-
-                # 設置比對完成狀態
-                st.session_state.comparison_done = True
-                # 保存比對結果到 session_state
-                st.session_state.comparison_results = combined_results
-                st.session_state.word_data = word_data
-                st.session_state.pdf_data = pdf_data
-                st.session_state.pdf_bytes = pdf_bytes
-
-        # 如果已完成比對，顯示結果
-        if st.session_state.comparison_done:
-            display_comparison_results(
-                st.session_state.comparison_results,
-                st.session_state.pdf_bytes,
-                st.session_state.word_data,
-                st.session_state.pdf_data
-            )
-
-    except Exception as e:
-        st.error(f"執行時發生錯誤：{str(e)}")
-        st.exception(e)
+                # 顯示表格比對結果
+                for result in table_results:
+                    st.write(f"Word 表格 {result['word_table']['index'] + 1} 與 PDF 表格 {result['pdf_table']['index'] + 1} 的比對結果")
+                    st.write(f"相似度: {result['similarity']:.2%}")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.subheader("Word 表格")
+                        st.dataframe(pd.DataFrame(result['word_table']['data']), use_container_width=True)
+                    with col2:
+                        st.subheader("PDF 表格")
+                        st.dataframe(pd.DataFrame(result['pdf_table']['data']), use_container_width=True)
+                    
+                    # 顯示差異報告
+                    if result['diff_report']:
+                        with st.expander("差異報告"):
+                            for diff in result['diff_report']:
+                                st.write(f"位置: 第 {diff['row']} 行, 第 {diff['col']} 列")
+                                if diff['type'] == 'modified':
+                                    st.write(f"Word: {diff['word_value']}")
+                                    st.write(f"PDF: {diff['pdf_value']}")
+                                elif diff['type'] == 'added':
+                                    st.write(f"PDF 新增: {diff['pdf_value']}")
+                                else:  # deleted
+                                    st.write(f"Word 刪除: {diff['word_value']}")
+                                st.divider()
+                    
+                    st.divider()
+        
+        # 清理暫存檔案
+        os.remove(word_path)
+        os.remove(pdf_path)
 
 if __name__ == "__main__":
     main()
