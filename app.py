@@ -5,7 +5,7 @@ import fitz  # PyMuPDF
 from docx import Document
 from text_preview import TextPreview
 from table_processor import TableProcessor
-from comparison_algorithm import compare_documents, display_match_results
+from comparison_algorithm import compare_documents, display_match_results, merge_word_paragraphs
 import tempfile
 import time
 import numpy as np
@@ -72,112 +72,51 @@ def main():
     
     # 只有當兩個文件都上傳後才處理
     if word_file and pdf_file:
-        # 保存臨時檔案
-        word_path = "temp_word.docx"
-        pdf_path = "temp_pdf.pdf"
+        # 提取文本和表格內容
+        word_content = text_preview.extract_word_content(word_file)
+        pdf_content = text_preview.extract_pdf_content(pdf_file)
         
-        with open(word_path, "wb") as f:
-            f.write(word_file.getvalue())
-        with open(pdf_path, "wb") as f:
-            f.write(pdf_file.getvalue())
+        # 提取表格內容
+        word_tables = table_processor.extract_word_tables(word_file)
+        pdf_tables = table_processor.extract_pdf_tables(pdf_file)
         
         # 創建標籤頁
         tab1, tab2, tab3 = st.tabs(["內容預覽", "表格預覽", "比對結果"])
         
         with tab1:
-            # 從文件中提取文本內容
-            word_content = text_preview.extract_word_content(word_path)
-            pdf_content = text_preview.extract_pdf_content(pdf_path)
-            
             # 顯示文本內容
             text_preview.display_content(word_content, pdf_content)
         
         with tab2:
-            # 提取表格內容
-            word_tables = table_processor.extract_word_tables(word_path)
-            pdf_tables = table_processor.extract_pdf_tables(pdf_path)
-            
             # 顯示表格內容
-            table_processor.display_tables(word_tables, pdf_tables)
+            table_comparison_results = table_processor.display_tables(word_tables, pdf_tables)
+            if table_comparison_results:
+                st.session_state.table_comparison_results = table_comparison_results
         
         with tab3:
             st.header("比對結果")
             
             if st.button("開始比對文件", type="primary"):
                 with st.spinner("正在進行文件比對..."):
-                    # 預處理 Word 段落
-                    word_paragraphs = word_content.get("paragraphs", [])
-                    pdf_paragraphs = pdf_content.get("paragraphs", [])
-                    
-                    # 合併 Word 段落
-                    merged_word_paragraphs = merge_word_paragraphs(word_paragraphs)
-                    
-                    # 進行比對
-                    comparison_results = compare_pdf_first(pdf_paragraphs, merged_word_paragraphs)
-                    
-                    # 表格比對
-                    if word_tables and pdf_tables:
-                        table_results = []
-                        for pdf_table in pdf_tables:
-                            best_match = None
-                            best_score = 0
-                            for word_table in word_tables:
-                                similarity, _ = table_processor.compare_tables(word_table['table'], pdf_table['table'])
-                                if similarity > best_score:
-                                    best_score = similarity
-                                    best_match = (word_table, similarity)
-                            
-                            if best_match:
-                                table_results.append({
-                                    'pdf_table': pdf_table,
-                                    'word_table': best_match[0],
-                                    'similarity': best_match[1]
-                                })
-                        
-                        st.session_state.table_comparison_results = table_results
-                    
+                    # 進行文本比對
+                    comparison_results = compare_documents(
+                        word_content, 
+                        pdf_content, 
+                        similarity_threshold=similarity_threshold,
+                        matching_method="hybrid"
+                    )
+                    st.session_state.comparison_results = comparison_results
                     st.success("比對完成！")
 
-            # 顯示比對結果
-            if comparison_results:
+            # 顯示文本比對結果
+            if hasattr(st.session_state, 'comparison_results') and st.session_state.comparison_results:
                 with st.expander("文本比對結果", expanded=True):
-                    display_match_results(comparison_results)
-                
-                # 顯示表格比對結果
-                if hasattr(st.session_state, 'table_comparison_results') and st.session_state.table_comparison_results:
-                    with st.expander("表格比對結果", expanded=True):
-                        for idx, result in enumerate(st.session_state.table_comparison_results):
-                            st.subheader(f"表格 {idx+1} 比對結果")
-                            st.write(f"相似度: {result['similarity']:.2%}")
-                            
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                st.write("Word 表格:")
-                                st.dataframe(result['word_table']['table'])
-                                st.caption(f"位於頁面: {result['word_table'].get('page', 'N/A')}")
-                            
-                            with col2:
-                                st.write("PDF 表格:")
-                                st.dataframe(result['pdf_table']['table'])
-                                st.caption(f"位於頁面: {result['pdf_table'].get('page', 'N/A')}")
-                            
-                            # 顯示差異報告
-                            diff_report = table_processor.generate_diff_report(
-                                result['word_table']['table'], 
-                                result['pdf_table']['table']
-                            )
-                            if diff_report:
-                                st.write("差異報告:")
-                                st.json(diff_report)
-                            
-                            st.markdown("---")
-        
-        # 清理臨時檔案
-        try:
-            os.remove(word_path)
-            os.remove(pdf_path)
-        except:
-            pass
+                    display_match_results(
+                        st.session_state.comparison_results,
+                        word_content,
+                        pdf_content,
+                        st
+                    )
 
 if __name__ == "__main__":
     main()
