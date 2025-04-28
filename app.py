@@ -3,7 +3,7 @@ import os, io
 import pandas as pd
 import fitz  # PyMuPDF
 from docx import Document
-from text_preview import TextPreview
+from text_preview import TextPreview, QwenOCR
 from table_processor import TableProcessor
 import tempfile
 import time
@@ -44,15 +44,24 @@ def main():
         st.write("提示: 上傳文件後，可以先查看內容預覽，確認文字提取準確性")
         st.markdown("---")
         st.header("API設置")
-        api_key = st.text_input("Qwen OCR API密鑰", type="password", 
-                              help="可選項：如果預設密鑰受限或不可用，請輸入您自己的API密鑰")
+        
+        # 顯示當前API模式
+        use_free_api = text_preview.ocr.should_use_free_api()
+        current_mode = "免費API模式" if use_free_api else "官方API模式"
+        st.success(f"當前OCR設置: {current_mode}")
+        
+        api_key = st.text_input("Qwen OCR API密鑰（可選）", type="password", 
+                               help="若要使用官方API，請輸入您的API密鑰。留空則使用免費API。")
+        
         if api_key:
             # 設置環境變數
             os.environ["QWEN_API_KEY"] = api_key
             # 直接設置到OCR物件
             text_preview.ocr.set_api_key(api_key)
             table_processor.qwen_ocr.set_api_key(api_key)
-            st.success("API密鑰已設置")
+            st.success("API密鑰已設置，將使用官方API")
+        else:
+            st.info("未提供API密鑰，將使用免費API")
     
     # 設置側邊欄
     st.sidebar.title("設置")
@@ -95,6 +104,10 @@ def main():
         # 顯示載入中
         with st.spinner("正在提取文件內容..."):
             try:
+                # OCR模式提示
+                ocr_mode = "免費API" if text_preview.ocr.should_use_free_api() else "官方API"
+                st.info(f"使用 {ocr_mode} 進行文件處理...")
+                
                 # 提取文本和表格內容
                 word_content = text_preview.extract_word_content(word_file)
                 pdf_content = text_preview.extract_pdf_content(pdf_file)
@@ -157,6 +170,7 @@ def main():
                                 st.error(f"顯示比對結果時出錯: {str(e)}")
             except Exception as e:
                 st.error(f"處理文件時出錯: {str(e)}")
+                st.error("如果出現API錯誤，請嘗試不提供API密鑰，系統將自動使用免費API模式。")
 
 if __name__ == "__main__":
     main()

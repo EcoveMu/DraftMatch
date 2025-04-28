@@ -10,22 +10,30 @@ from PIL import Image
 import numpy as np
 import base64
 import os
+import tempfile
 from io import BytesIO
 
 class QwenOCR:
-    """阿里雲千問OCR API封裝類"""
+    """阿里雲千問OCR API封裝類，支持官方API和免費API"""
     def __init__(self):
-        self.api_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
-        # 預設API密鑰 (免費測試使用，僅供開發測試，使用有限制，建議替換為自己的密鑰)
-        self._default_api_key = "sk-1f304f42d4bf1af9c2a3b2a7b4d94cae" # 示例密鑰，實際運行時請替換
-        # 用戶設置的API密鑰，優先使用用戶設置的
+        # 官方API設置
+        self.official_api_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+        self.official_model = "qwen-vl-max"
+        
+        # 免費API設置
+        self.free_api_url = "https://api.qwen-2.com/v1/chat/completions"
+        self.free_model = "qwen2.5-7b-instruct"
+        
+        # 用戶設置的API密鑰
         self._user_api_key = ""
-        # 從環境變數獲取
-        self.api_key = os.environ.get("QWEN_API_KEY", "")
+        # 從環境變數獲取的API密鑰
+        self._env_api_key = os.environ.get("QWEN_API_KEY", "")
+        # 預設API密鑰（已刪除無效密鑰）
+        self._default_api_key = ""
     
     @property
     def api_key(self):
-        # 優先使用用戶設置的密鑰，其次使用環境變數的密鑰，最後使用預設密鑰
+        """獲取API密鑰，優先使用用戶設置的密鑰"""
         if self._user_api_key:
             return self._user_api_key
         elif self._env_api_key:
@@ -35,20 +43,25 @@ class QwenOCR:
     
     @api_key.setter
     def api_key(self, value):
+        """設置API密鑰（環境變數）"""
         if value:
             self._env_api_key = value
         else:
             self._env_api_key = ""
     
     def set_api_key(self, key):
-        """直接設置API密鑰"""
+        """直接設置API密鑰（用戶指定）"""
         if key:
             self._user_api_key = key
             return True
         return False
     
+    def should_use_free_api(self):
+        """判斷是否使用免費API"""
+        return not self.api_key or self.api_key.strip() == ""
+    
     def extract_text(self, image_bytes):
-        """使用阿里雲千問OCR API提取圖像中的文字
+        """使用OCR API提取圖像中的文字
         
         參數:
             image_bytes: 圖像的字節數據
@@ -56,42 +69,53 @@ class QwenOCR:
         返回:
             提取的文字
         """
-        # 檢查是否有可用的API密鑰
-        api_key = self.api_key
-        if not api_key:
-            st.error("請設置Qwen OCR API密鑰以使用OCR功能")
+        try:
+            # 將圖像轉換為Base64
+            base64_image = base64.b64encode(image_bytes).decode('utf-8')
+            
+            # 判斷使用哪種API
+            if self.should_use_free_api():
+                return self._extract_text_free_api(base64_image)
+            else:
+                return self._extract_text_official_api(base64_image)
+        except Exception as e:
+            st.error(f"OCR處理出錯: {str(e)}")
             return ""
-        
-        # 將圖像轉換為Base64
-        base64_image = base64.b64encode(image_bytes).decode('utf-8')
-        
+    
+    def _extract_text_official_api(self, base64_image):
+        """使用官方API提取文本"""
         # 設置請求頭
         headers = {
-            "Authorization": f"Bearer {api_key}",
+            "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
         
         # 設置請求體
-        prompt = "請識別圖片中的所有文字，保留原有格式，包括標點符號和換行。"
         payload = {
-            "model": "qwen-vl-max",
+            "model": self.official_model,
             "input": {
                 "messages": [
+                    {
+                        "role": "system",
+                        "content": "你是一個專業的OCR助手，請提取圖像中的所有文本內容，保持原始格式。"
+                    },
                     {
                         "role": "user",
                         "content": [
                             {"image": base64_image},
-                            {"text": prompt}
+                            {"text": "請提取這個圖像中的所有文字，保留原有格式，包括標點符號和換行。"}
                         ]
                     }
                 ]
             },
-            "parameters": {}
+            "parameters": {
+                "result_format": "message"
+            }
         }
         
         try:
             # 發送請求
-            response = requests.post(self.api_url, headers=headers, json=payload)
+            response = requests.post(self.official_api_url, headers=headers, json=payload)
             
             if response.status_code == 200:
                 result = response.json()
@@ -101,7 +125,75 @@ class QwenOCR:
                 st.error(f"OCR API請求失敗: {response.status_code} - {response.text}")
                 return ""
         except Exception as e:
-            st.error(f"OCR處理出錯: {str(e)}")
+            st.error(f"官方API請求出錯: {str(e)}")
+            return ""
+    
+    def _extract_text_free_api(self, base64_image):
+        """使用免費API提取文本"""
+        headers = {"Content-Type": "application/json"}
+        payload = {
+            "model": self.free_model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "你是一個專業的OCR助手，請提取圖像中的所有文本內容，保持原始格式。"
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
+                        },
+                        {
+                            "type": "text",
+                            "text": "請提取這個圖像中的所有文字，保留原有格式，包括標點符號和換行。"
+                        }
+                    ]
+                }
+            ],
+            "temperature": 0.1,
+            "max_tokens": 4000
+        }
+        
+        try:
+            response = requests.post(self.free_api_url, headers=headers, json=payload)
+            
+            if response.status_code == 200:
+                result = response.json()
+                text = result["choices"][0]["message"]["content"]
+                return text
+            else:
+                st.error(f"免費API請求失敗: {response.status_code} - {response.text}")
+                return ""
+        except Exception as e:
+            st.error(f"免費API請求出錯: {str(e)}")
+            return ""
+    
+    def extract_text_from_pdf_page(self, pdf_path, page_num):
+        """從PDF頁面提取文本"""
+        try:
+            doc = fitz.open(pdf_path)
+            page = doc[page_num]
+            pix = page.get_pixmap(matrix=fitz.Matrix(300/72, 300/72))
+            
+            # 保存為臨時圖像文件
+            temp_dir = tempfile.mkdtemp()
+            temp_img_path = os.path.join(temp_dir, f"pdf_page_{page_num}.png")
+            pix.save(temp_img_path)
+            
+            # 讀取圖像並使用OCR
+            with open(temp_img_path, "rb") as img_file:
+                image_bytes = img_file.read()
+                text = self.extract_text(image_bytes)
+            
+            # 清理臨時文件
+            os.remove(temp_img_path)
+            os.rmdir(temp_dir)
+            
+            return text
+        except Exception as e:
+            st.error(f"從PDF提取文本時出錯: {str(e)}")
             return ""
 
 class TextPreview:
@@ -182,6 +274,10 @@ class TextPreview:
         # 打開PDF文件
         doc = fitz.open(temp_file)
         paragraphs = []
+        
+        # 提取模式信息
+        ocr_mode = "免費API" if self.ocr.should_use_free_api() else "官方API"
+        st.info(f"使用 {ocr_mode} 進行OCR文本提取...")
         
         # 處理每一頁
         for page_num, page in enumerate(doc):

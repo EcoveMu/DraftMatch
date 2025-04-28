@@ -80,6 +80,10 @@ class TableProcessor:
             doc = fitz.open(tmp_path)
             tables = []
             
+            # 顯示使用哪種API
+            ocr_mode = "免費API" if self.qwen_ocr.should_use_free_api() else "官方API"
+            st.info(f"使用 {ocr_mode} 進行表格提取...")
+            
             for page_num in range(len(doc)):
                 try:
                     page = doc[page_num]
