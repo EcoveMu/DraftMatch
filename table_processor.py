@@ -5,6 +5,8 @@ from docx import Document
 import fitz  # PyMuPDF
 from qwen_ocr import QwenOCR
 import re
+from PIL import Image
+import io
 
 class TableProcessor:
     def __init__(self):
@@ -45,16 +47,48 @@ class TableProcessor:
         for page_num in range(len(doc)):
             page = doc[page_num]
             
-            # 使用 Qwen OCR 提取表格
-            table_data = self.qwen_ocr.extract_table(page)
+            # 將頁面轉換為圖片
+            pix = page.get_pixmap()
+            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
             
-            if table_data:
-                tables.append({
-                    'index': len(tables),
-                    'data': table_data,
-                    'page': page_num + 1
-                })
+            # 將圖片轉為臨時文件
+            img_bytes = io.BytesIO()
+            img.save(img_bytes, format='PNG')
+            img_bytes.seek(0)
+            
+            # 嘗試使用 OCR 提取表格內容
+            try:
+                # 使用正則表達式解析表格
+                text = self.qwen_ocr.extract_text(img)
+                lines = text.strip().split('\n')
+                
+                # 檢測表格結構
+                table_data = []
+                current_table = []
+                
+                for line in lines:
+                    cells = [cell.strip() for cell in line.split('|') if cell.strip()]
+                    # 如果這行有至少2個單元格，視為表格行
+                    if len(cells) >= 2:
+                        current_table.append(cells)
+                    elif current_table:  # 遇到非表格行且已有表格內容
+                        if len(current_table) >= 2:  # 至少有2行才視為表格
+                            table_data = current_table
+                            break
+                        current_table = []
+                
+                # 如果找到表格資料，加入結果
+                if table_data:
+                    tables.append({
+                        'index': len(tables),
+                        'data': table_data,
+                        'page': page_num + 1
+                    })
+                    
+            except Exception as e:
+                st.warning(f"處理 PDF 第 {page_num + 1} 頁表格時出錯: {str(e)}")
         
+        doc.close()
         return tables
     
     def normalize_table(self, table_data):
