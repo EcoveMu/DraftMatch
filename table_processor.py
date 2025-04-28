@@ -7,6 +7,8 @@ from qwen_ocr import QwenOCR
 import re
 from PIL import Image
 import io
+import tempfile
+import os
 
 class TableProcessor:
     def __init__(self):
@@ -45,46 +47,76 @@ class TableProcessor:
         tables = []
         
         for page_num in range(len(doc)):
-            page = doc[page_num]
-            
-            # 將頁面轉換為圖片
-            pix = page.get_pixmap()
-            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-            
-            # 將圖片轉為臨時文件
-            img_bytes = io.BytesIO()
-            img.save(img_bytes, format='PNG')
-            img_bytes.seek(0)
-            
-            # 嘗試使用 OCR 提取表格內容
             try:
-                # 使用正則表達式解析表格
-                text = self.qwen_ocr.extract_text(img)
+                page = doc[page_num]
+                
+                # 將頁面轉換為圖片
+                pix = page.get_pixmap()
+                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                
+                # 嘗試使用 OCR 提取文字
+                text = ""
+                try:
+                    # 先嘗試使用 extract_text_from_image 方法
+                    # 將圖片保存為臨時文件
+                    temp_dir = tempfile.mkdtemp()
+                    temp_img_path = os.path.join(temp_dir, f"page_{page_num}.png")
+                    img.save(temp_img_path)
+                    
+                    text = self.qwen_ocr.extract_text_from_image(temp_img_path)
+                    
+                    # 清理臨時文件
+                    os.remove(temp_img_path)
+                    os.rmdir(temp_dir)
+                except Exception as e:
+                    st.warning(f"使用 extract_text_from_image 提取 PDF 第 {page_num + 1} 頁文字失敗: {str(e)}")
+                    # 如果 extract_text_from_image 失敗，嘗試其他方法
+                    try:
+                        # 使用提取 PDF 文字的原生方法
+                        text = page.get_text()
+                    except Exception as e2:
+                        st.warning(f"使用 get_text 提取 PDF 第 {page_num + 1} 頁文字失敗: {str(e2)}")
+                
+                # 如果沒有成功提取文字，則繼續下一頁
+                if not text or not text.strip():
+                    continue
+                    
+                # 嘗試解析表格
+                table_data = []
                 lines = text.strip().split('\n')
                 
-                # 檢測表格結構
-                table_data = []
+                # 簡單表格解析邏輯
+                # 查找含有多個空格或製表符的行，這些可能是表格行
                 current_table = []
-                
                 for line in lines:
-                    cells = [cell.strip() for cell in line.split('|') if cell.strip()]
-                    # 如果這行有至少2個單元格，視為表格行
-                    if len(cells) >= 2:
-                        current_table.append(cells)
-                    elif current_table:  # 遇到非表格行且已有表格內容
-                        if len(current_table) >= 2:  # 至少有2行才視為表格
+                    # 如果行包含多個連續空格或製表符，可能是表格
+                    if '\t' in line or '  ' in line:
+                        # 拆分單元格 (基於製表符或多個空格)
+                        cells = re.split(r'\t+|\s{2,}', line.strip())
+                        cells = [cell.strip() for cell in cells if cell.strip()]
+                        
+                        if len(cells) >= 2:  # 至少有兩列才視為表格行
+                            current_table.append(cells)
+                    elif len(current_table) > 0:
+                        # 如果已經開始收集表格行，且遇到非表格行，檢查是否應該結束表格
+                        if len(current_table) >= 2:  # 至少有兩行才視為表格
                             table_data = current_table
                             break
                         current_table = []
                 
-                # 如果找到表格資料，加入結果
-                if table_data:
+                # 如果找到表格，添加到結果中
+                if table_data and len(table_data) >= 2:  # 至少有表頭和一行數據
+                    # 標準化表格（確保每行有相同數量的列）
+                    max_cols = max(len(row) for row in table_data)
+                    normalized_table = []
+                    for row in table_data:
+                        normalized_table.append(row + [''] * (max_cols - len(row)))
+                    
                     tables.append({
                         'index': len(tables),
-                        'data': table_data,
+                        'data': normalized_table,
                         'page': page_num + 1
                     })
-                    
             except Exception as e:
                 st.warning(f"處理 PDF 第 {page_num + 1} 頁表格時出錯: {str(e)}")
         

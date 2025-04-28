@@ -353,3 +353,29 @@ class QwenOCR:
                 return None
         except Exception as e:
             return None
+
+    def extract_text(self, image):
+        """直接從 PIL Image 對象中提取文本
+        
+        Args:
+            image (PIL.Image): 圖像對象
+            
+        Returns:
+            str: 提取的文本
+        """
+        try:
+            # 如果是PIL圖像，轉換為臨時文件
+            temp_dir = tempfile.mkdtemp()
+            temp_img_path = os.path.join(temp_dir, "temp_image.png")
+            image.save(temp_img_path)
+            
+            # 使用現有方法提取文本
+            text = self.extract_text_from_image(temp_img_path)
+            
+            # 清理臨時文件
+            os.remove(temp_img_path)
+            os.rmdir(temp_dir)
+            
+            return text
+        except Exception as e:
+            return f"提取文本時出錯: {str(e)}"
