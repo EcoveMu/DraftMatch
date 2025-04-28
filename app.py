@@ -114,73 +114,9 @@ def main():
     
     # 側邊欄設定
     with st.sidebar:
-        st.header("設置")
-        
-        # OCR引擎選擇
-        st.subheader("OCR引擎設定")
-        ocr_manager = OCRManager()
-        available_engines = ocr_manager.get_available_engines()
-        
-        # 轉換引擎名稱為更友好的顯示名稱
-        engine_display_names = {
-            "tesseract": "Tesseract OCR (本地)",
-            "easyocr": "EasyOCR (本地)",
-            "qwen": "千問 OCR (API)"
-        }
-        
-        # 創建一個反向映射，從顯示名稱回到引擎名稱
-        display_to_engine = {v: k for k, v in engine_display_names.items()}
-        
-        # 創建可用引擎的顯示名稱列表
-        available_display_names = [engine_display_names.get(name, name) for name in available_engines.keys()]
-        
-        # 預設選擇千問OCR
-        default_engine = "qwen" if "qwen" in available_engines else next(iter(available_engines.keys()))
-        default_display = engine_display_names.get(default_engine, default_engine)
-        
-        # 引擎選擇
-        selected_display = st.selectbox(
-            "選擇OCR引擎",
-            options=available_display_names,
-            index=available_display_names.index(default_display) if default_display in available_display_names else 0,
-            help="選擇用於提取PDF圖像文字的OCR引擎"
-        )
-        
-        # 轉換回引擎名稱
-        selected_engine = display_to_engine.get(selected_display, selected_display)
-        
-        # 千問OCR API設置
-        if selected_engine == "qwen":
-            st.info("千問OCR支持官方API和免費API，如果不提供API密鑰將自動使用免費API")
-            api_key = st.text_input(
-                "千問 API 密鑰 (選填)",
-                type="password",
-                help="輸入您的千問API密鑰，如果不提供將使用免費API",
-                key="qwen_api_key"
-            )
-            
-            if api_key:
-                # 設置環境變數
-                os.environ["QWEN_API_KEY"] = api_key
-                # 直接設置到QwenOCR
-                qwen_ocr = ocr_manager.get_engine_by_name("qwen")
-                if qwen_ocr:
-                    qwen_ocr.set_api_key(api_key)
-                    st.success("API密鑰已設置")
-        
-        # 設置OCR引擎
-        text_preview.set_ocr_engine(selected_engine)
-        
-        # 告知用戶當前使用的OCR引擎
-        current_engine = text_preview.ocr
-        st.info(f"當前使用: {current_engine.name}")
-        
-        # 顯示千問OCR模式
-        if selected_engine == "qwen":
-            qwen_mode = "免費API" if current_engine.should_use_free_api() else "官方API"
-            st.info(f"千問OCR模式: {qwen_mode}")
-        
-        # 設置相似度閾值滑桿
+        st.header("OCR 設定")
+        st.info("雲端僅支援千問 OCR (API)，無需 API 金鑰，直接可用。")
+        # 不顯示引擎選擇與 API key 輸入框
         similarity_threshold = st.slider(
             "相似度閾值", 
             min_value=0.1, 
@@ -188,27 +124,14 @@ def main():
             value=0.7, 
             step=0.05
         )
-        
-        # 設置搜索方向並添加說明
         st.subheader("搜尋方向")
         search_direction = st.radio(
             "選擇搜尋方向",
             options=["PDF → Word", "Word → PDF"],
             help="PDF → Word: 在Word中查找PDF的內容\nWord → PDF: 在PDF中查找Word的內容"
         )
-        
-        # 設置使用OCR
-        use_ocr = st.checkbox("使用OCR處理PDF", value=True, help="使用光學字符識別(OCR)處理PDF文件中的圖像")
-        
-        # 顯示OCR引擎的相關說明
-        if use_ocr:
-            st.info(f"""
-            當前選擇的OCR引擎: **{selected_display}**
-            
-            - Tesseract: 本地開源OCR引擎，支持多種語言
-            - EasyOCR: 本地深度學習OCR引擎，準確度較高
-            - 千問OCR: 阿里雲的OCR服務，準確度最高且支持免費API
-            """)
+        use_ocr = True  # 強制啟用 OCR
+        st.info("本系統已自動啟用 OCR，無需額外設定。")
     
     # 設置側邊欄
     st.sidebar.title("功能說明")
@@ -239,11 +162,7 @@ def main():
         with st.spinner("正在提取文件內容..."):
             try:
                 # OCR模式提示
-                if selected_engine == "qwen":
-                    ocr_mode = "免費API" if text_preview.ocr.should_use_free_api() else "官方API"
-                    st.info(f"使用千問OCR {ocr_mode}進行文件處理...")
-                else:
-                    st.info(f"使用{current_engine.name}進行文件處理...")
+                st.info(f"使用OCR進行文件處理...")
                 
                 # 提取文本和表格內容
                 word_content = text_preview.extract_word_content(word_file)

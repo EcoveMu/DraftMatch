@@ -286,15 +286,13 @@ class OCRManager:
     """OCR管理器，用於管理多個OCR引擎"""
     def __init__(self):
         self.engines = {
-            "tesseract": TesseractOCR(),
-            "easyocr": EasyOCR(),
-            "qwen": QwenOCR()
+            "qwen": QwenOCR()  # 只保留 QwenOCR
         }
-        self.current_engine_name = "qwen"  # 默認使用千問OCR，因為它始終可用
+        self.current_engine_name = "qwen"
     
     def get_available_engines(self):
         """獲取所有可用的OCR引擎"""
-        return {name: engine for name, engine in self.engines.items() if engine.is_available()}
+        return self.engines
     
     def set_engine(self, engine_name):
         """設置當前使用的OCR引擎"""
