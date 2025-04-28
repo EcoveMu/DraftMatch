@@ -41,9 +41,34 @@ PDF 頁內的每一段文字將進行下列多層次比對：
 #### ✅ 表格支援與差異分析
 系統支援表格內容的單元格級比對，可標示欄位變動、數值誤植、格式異動等問題。
 
+## OCR 引擎
 
+本應用支持多種 OCR 引擎，可用於從 PDF 中提取文本：
 
+1. **Tesseract OCR** - 開源 OCR 引擎，本地運行
+2. **EasyOCR** - 基於深度學習的 OCR，本地運行
+3. **OCRopus** - 基於LSTM神經網絡的OCR系統，專為研究設計
+4. **千問 OCR** - 阿里雲的 OCR 服務，提供更高精度
 
+### OCRopus 安裝
+
+OCRopus 需要額外安裝步驟：
+
+```bash
+# 基礎依賴
+pip install numpy scipy pillow
+
+# 安裝OCRopus (適用於Linux/Mac)
+git clone https://github.com/ocropus/ocropy.git
+cd ocropy
+pip install -e .
+
+# 下載預訓練模型
+wget -nd https://ocropus.github.io/ocropy/models/en-default.pyrnn.gz
+mv en-default.pyrnn.gz models/
+```
+
+Windows 用戶可能需要使用 WSL (Windows Subsystem for Linux) 來運行 OCRopus。
 
 ## 文件說明
 

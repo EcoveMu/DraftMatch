@@ -38,7 +38,7 @@ def extract_text_from_word(file):
             table_data.append(row_data)
         # 跳過完全空白的表格
         if any(any(cell for cell in row) for row in table_data):
-            # 嘗試獲取表格標題（表格前最近的段落中包含“表”或“Table”的作為標題）
+            # 嘗試獲取表格標題（表格前最近的段落中包含"表"或"Table"的作為標題）
             title = ""
             if paragraphs:
                 for j in range(len(paragraphs)-1, -1, -1):
@@ -279,6 +279,104 @@ def extract_text_from_pdf_with_ocr(file, ocr_engine="tesseract", ocr_instance=No
     os.rmdir(temp_dir)
     return {"paragraphs": all_paragraphs, "tables": all_tables}
 
+def extract_text_from_pdf_with_ocropus(file):
+    """使用OCRopus從PDF文件中提取文本段落和表格。
+    
+    OCRopus (或OCRopy) 是一個OCR系統，尤其針對訓練和研究設計，支持多種語言。
+    
+    參數:
+        file: 上傳的PDF文件的內容
+        
+    返回:
+        包含提取的段落和表格的字典
+    """
+    try:
+        # 需要確保已安裝ocropus相關依賴
+        import ocrolib
+        from ocrolib import psegutils, morph, bad
+        
+        temp_dir = tempfile.mkdtemp()
+        temp_file_path = os.path.join(temp_dir, "temp.pdf")
+        # 保存上傳的PDF文件到臨時文件
+        with open(temp_file_path, "wb") as f:
+            f.write(file.getvalue())
+            
+        doc = fitz.open(temp_file_path)
+        all_paragraphs = []
+        all_tables = []
+        
+        print("正在使用OCRopus提取文本，這可能需要一些時間...")
+        
+        for i in range(len(doc)):
+            print(f"正在OCRopus處理頁面 {i+1}...")
+            page = doc[i]
+            # 使用高解析度獲取頁面圖像
+            pix = page.get_pixmap(matrix=fitz.Matrix(300/72, 300/72))
+            img_path = os.path.join(temp_dir, f"page_{i+1}.png")
+            pix.save(img_path)
+            
+            # OCRopus工作流程：
+            # 1. 二值化圖像
+            # 2. 分割頁面為文本行
+            # 3. 識別每一行
+            # 4. 組合結果
+            
+            # 使用OCRopus執行二值化和分割
+            os.system(f"ocropus-nlbin {img_path} -o {temp_dir}/temp")
+            os.system(f"ocropus-gpageseg {temp_dir}/temp.bin.png")
+            
+            # 識別每一行
+            os.system(f"ocropus-rpred -m en-default {temp_dir}/temp/????/??????.bin.png")
+            
+            # 將結果組合成單個文本
+            os.system(f"ocropus-hocr {temp_dir}/temp/????/??????.bin.png -o {temp_dir}/output.html")
+            
+            # 從HTML中提取文本
+            with open(f"{temp_dir}/output.html", "r", encoding="utf-8") as f:
+                html_content = f.read()
+            
+            # 使用正則表達式從hOCR中提取文本
+            text_pattern = re.compile(r'<span class="ocr_line".*?>(.*?)</span>', re.DOTALL)
+            text_matches = text_pattern.findall(html_content)
+            
+            # 清理HTML標記
+            clean_text = []
+            for match in text_matches:
+                # 移除HTML標記
+                text = re.sub(r'<.*?>', '', match)
+                clean_text.append(text.strip())
+            
+            # 將行組合為段落（根據空行分割）
+            text = "\n".join(clean_text)
+            if text:
+                page_paragraphs = text.split('\n\n')
+                for para in page_paragraphs:
+                    para = para.strip()
+                    if para:
+                        all_paragraphs.append({
+                            "index": len(all_paragraphs),
+                            "content": para,
+                            "page": i + 1,
+                            "type": "paragraph"
+                        })
+            
+            # 表格處理 - OCRopus不直接支持表格識別，可以結合其他工具
+            # 在這裡，我們可以使用一個簡單的啟發式方法來檢測表格結構
+            
+        # 清理臨時文件
+        os.remove(temp_file_path)
+        import shutil
+        shutil.rmtree(temp_dir)
+        
+        return {"paragraphs": all_paragraphs, "tables": all_tables}
+        
+    except ImportError:
+        print("OCRopus未安裝或依賴項缺失。請安裝OCRopus及相關依賴。")
+        return {"paragraphs": [], "tables": []}
+    except Exception as e:
+        print(f"OCRopus處理出錯: {str(e)}")
+        return {"paragraphs": [], "tables": []}
+
 def enhanced_extract_tables_from_pdf(file) -> list:
     """Enhanced function to extract tables from PDF with better table detection and title matching"""
     # Create temp file
@@ -364,7 +462,10 @@ def extract_and_process_documents(word_file, pdf_file, use_ocr=True, ocr_engine=
     # 如果使用OCR，使用OCR引擎提取補充的PDF文本
     pdf_data_ocr = {"paragraphs": [], "tables": []}
     if use_ocr:
-        pdf_data_ocr = extract_text_from_pdf_with_ocr(pdf_file, ocr_engine, ocr_instance)
+        if ocr_engine.lower() == "ocropus":
+            pdf_data_ocr = extract_text_from_pdf_with_ocropus(pdf_file)
+        else:
+            pdf_data_ocr = extract_text_from_pdf_with_ocr(pdf_file, ocr_engine, ocr_instance)
     # Extract PDF content with enhanced table extraction
     pdf_tables = enhanced_extract_tables_from_pdf(pdf_file)
     # 合併提取的段落和表格

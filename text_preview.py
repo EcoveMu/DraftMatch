@@ -12,10 +12,188 @@ import base64
 import os
 import tempfile
 from io import BytesIO
+import pytesseract
+import traceback
+try:
+    import easyocr
+    EASYOCR_AVAILABLE = True
+except ImportError:
+    EASYOCR_AVAILABLE = False
 
-class QwenOCR:
+try:
+    import ocrolib
+    OCROPUS_AVAILABLE = True
+except ImportError:
+    OCROPUS_AVAILABLE = False
+
+class BaseOCR:
+    """OCR基礎類，所有OCR引擎都繼承此類"""
+    def __init__(self):
+        self.name = "基礎OCR"
+    
+    def extract_text(self, image_bytes):
+        """提取圖像中的文字"""
+        raise NotImplementedError("必須在子類中實現")
+    
+    def is_available(self):
+        """檢查OCR引擎是否可用"""
+        return True
+
+class TesseractOCR(BaseOCR):
+    """使用Tesseract OCR引擎提取文字"""
+    def __init__(self, lang="chi_tra+eng"):
+        super().__init__()
+        self.name = "Tesseract OCR"
+        self.lang = lang
+        self._check_tesseract()
+    
+    def _check_tesseract(self):
+        """檢查Tesseract是否已安裝並可用"""
+        try:
+            pytesseract.get_tesseract_version()
+            self._available = True
+        except Exception as e:
+            self._available = False
+            st.warning(f"Tesseract OCR 未安裝或不可用: {str(e)}")
+    
+    def is_available(self):
+        return self._available
+    
+    def extract_text(self, image_bytes):
+        """使用Tesseract提取圖像中的文字"""
+        if not self.is_available():
+            return "Tesseract OCR未安裝或不可用"
+        
+        try:
+            # 將圖像字節轉換為PIL圖像
+            img = Image.open(BytesIO(image_bytes))
+            
+            # 使用Tesseract提取文字
+            text = pytesseract.image_to_string(img, lang=self.lang)
+            return text
+        except Exception as e:
+            st.error(f"Tesseract OCR處理出錯: {str(e)}")
+            return ""
+
+class EasyOCR(BaseOCR):
+    """使用EasyOCR引擎提取文字"""
+    def __init__(self, lang=["ch_tra", "en"]):
+        super().__init__()
+        self.name = "EasyOCR"
+        self.lang = lang
+        self._reader = None
+        self._available = EASYOCR_AVAILABLE
+    
+    def _initialize_reader(self):
+        """初始化EasyOCR讀取器"""
+        if not self._reader and EASYOCR_AVAILABLE:
+            try:
+                self._reader = easyocr.Reader(self.lang)
+                return True
+            except Exception as e:
+                st.warning(f"EasyOCR初始化失敗: {str(e)}")
+                self._available = False
+                return False
+        return self._reader is not None
+    
+    def is_available(self):
+        return self._available
+    
+    def extract_text(self, image_bytes):
+        """使用EasyOCR提取圖像中的文字"""
+        if not self.is_available():
+            return "EasyOCR未安裝或不可用"
+        
+        # 初始化讀取器
+        if not self._initialize_reader():
+            return "EasyOCR初始化失敗"
+        
+        try:
+            # 將圖像字節轉換為numpy數組
+            img = Image.open(BytesIO(image_bytes))
+            img_np = np.array(img)
+            
+            # 使用EasyOCR提取文字
+            results = self._reader.readtext(img_np)
+            
+            # 整合結果
+            texts = [result[1] for result in results]
+            return "\n".join(texts)
+        except Exception as e:
+            st.error(f"EasyOCR處理出錯: {str(e)}")
+            traceback.print_exc()
+            return ""
+
+class OCRopusOCR(BaseOCR):
+    """使用OCRopus OCR引擎提取文字"""
+    def __init__(self, lang="eng"):  # OCRopus支持的語言較少，默認為英文
+        super().__init__()
+        self.name = "OCRopus OCR"
+        self.lang = lang
+        self._available = OCROPUS_AVAILABLE
+    
+    def is_available(self):
+        """檢查OCRopus是否可用"""
+        return self._available
+    
+    def extract_text(self, image_bytes):
+        """使用OCRopus提取圖像中的文字"""
+        if not self.is_available():
+            return "OCRopus未安裝或不可用"
+        
+        try:
+            # 創建臨時目錄來保存處理文件
+            temp_dir = tempfile.mkdtemp()
+            temp_img_path = os.path.join(temp_dir, "temp_image.png")
+            
+            # 將圖像字節保存為臨時文件
+            img = Image.open(BytesIO(image_bytes))
+            img.save(temp_img_path)
+            
+            # 使用OCRopus處理圖像
+            # 1. 二值化圖像
+            os.system(f"ocropus-nlbin {temp_img_path} -o {temp_dir}/temp")
+            # 2. 分割頁面為文本行
+            os.system(f"ocropus-gpageseg {temp_dir}/temp.bin.png")
+            # 3. 識別每一行
+            model_path = f"-m {self.lang}-default" if self.lang else ""
+            os.system(f"ocropus-rpred {model_path} {temp_dir}/temp/????/??????.bin.png")
+            # 4. 將結果組合成單個文本
+            os.system(f"ocropus-hocr {temp_dir}/temp/????/??????.bin.png -o {temp_dir}/output.html")
+            
+            # 從HTML中提取文本
+            with open(f"{temp_dir}/output.html", "r", encoding="utf-8") as f:
+                html_content = f.read()
+            
+            # 使用正則表達式從hOCR中提取文本
+            text_pattern = re.compile(r'<span class="ocr_line".*?>(.*?)</span>', re.DOTALL)
+            text_matches = text_pattern.findall(html_content)
+            
+            # 清理HTML標記
+            clean_text = []
+            for match in text_matches:
+                # 移除HTML標記
+                text = re.sub(r'<.*?>', '', match)
+                clean_text.append(text.strip())
+            
+            # 組合成完整文本
+            extracted_text = "\n".join(clean_text)
+            
+            # 清理臨時文件
+            import shutil
+            shutil.rmtree(temp_dir)
+            
+            return extracted_text
+        except Exception as e:
+            st.error(f"OCRopus處理出錯: {str(e)}")
+            traceback.print_exc()
+            return ""
+
+class QwenOCR(BaseOCR):
     """阿里雲千問OCR API封裝類，支持官方API和免費API"""
     def __init__(self):
+        super().__init__()
+        self.name = "千問OCR"
         # 官方API設置
         self.official_api_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
         self.official_model = "qwen-vl-max"
@@ -60,6 +238,10 @@ class QwenOCR:
         """判斷是否使用免費API"""
         return not self.api_key or self.api_key.strip() == ""
     
+    def is_available(self):
+        """QwenOCR總是可用，因為可以使用免費API"""
+        return True
+    
     def extract_text(self, image_bytes):
         """使用OCR API提取圖像中的文字
         
@@ -79,7 +261,8 @@ class QwenOCR:
             else:
                 return self._extract_text_official_api(base64_image)
         except Exception as e:
-            st.error(f"OCR處理出錯: {str(e)}")
+            st.error(f"Qwen OCR處理出錯: {str(e)}")
+            traceback.print_exc()
             return ""
     
     def _extract_text_official_api(self, base64_image):
@@ -122,10 +305,10 @@ class QwenOCR:
                 text = result["output"]["choices"][0]["message"]["content"]
                 return text
             else:
-                st.error(f"OCR API請求失敗: {response.status_code} - {response.text}")
+                st.error(f"Qwen官方API請求失敗: {response.status_code} - {response.text}")
                 return ""
         except Exception as e:
-            st.error(f"官方API請求出錯: {str(e)}")
+            st.error(f"Qwen官方API請求出錯: {str(e)}")
             return ""
     
     def _extract_text_free_api(self, base64_image):
@@ -164,43 +347,65 @@ class QwenOCR:
                 text = result["choices"][0]["message"]["content"]
                 return text
             else:
-                st.error(f"免費API請求失敗: {response.status_code} - {response.text}")
+                st.error(f"Qwen免費API請求失敗: {response.status_code} - {response.text}")
                 return ""
         except Exception as e:
-            st.error(f"免費API請求出錯: {str(e)}")
+            st.error(f"Qwen免費API請求出錯: {str(e)}")
             return ""
+
+class OCRManager:
+    """OCR管理器，用於管理多個OCR引擎"""
+    def __init__(self):
+        self.engines = {
+            "tesseract": TesseractOCR(),
+            "easyocr": EasyOCR(),
+            "ocropus": OCRopusOCR(),
+            "qwen": QwenOCR()
+        }
+        self.current_engine_name = "tesseract"  # 默認使用Tesseract
     
-    def extract_text_from_pdf_page(self, pdf_path, page_num):
-        """從PDF頁面提取文本"""
-        try:
-            doc = fitz.open(pdf_path)
-            page = doc[page_num]
-            pix = page.get_pixmap(matrix=fitz.Matrix(300/72, 300/72))
-            
-            # 保存為臨時圖像文件
-            temp_dir = tempfile.mkdtemp()
-            temp_img_path = os.path.join(temp_dir, f"pdf_page_{page_num}.png")
-            pix.save(temp_img_path)
-            
-            # 讀取圖像並使用OCR
-            with open(temp_img_path, "rb") as img_file:
-                image_bytes = img_file.read()
-                text = self.extract_text(image_bytes)
-            
-            # 清理臨時文件
-            os.remove(temp_img_path)
-            os.rmdir(temp_dir)
-            
-            return text
-        except Exception as e:
-            st.error(f"從PDF提取文本時出錯: {str(e)}")
-            return ""
+    def get_available_engines(self):
+        """獲取所有可用的OCR引擎"""
+        return {name: engine for name, engine in self.engines.items() if engine.is_available()}
+    
+    def set_engine(self, engine_name):
+        """設置當前使用的OCR引擎"""
+        if engine_name in self.engines:
+            self.current_engine_name = engine_name
+            return True
+        return False
+    
+    def get_current_engine(self):
+        """獲取當前使用的OCR引擎"""
+        return self.engines[self.current_engine_name]
+    
+    def extract_text(self, image_bytes):
+        """使用當前OCR引擎提取文字"""
+        engine = self.get_current_engine()
+        return engine.extract_text(image_bytes)
+    
+    def get_current_engine_name(self):
+        """獲取當前引擎名稱"""
+        return self.current_engine_name
+    
+    def get_engine_by_name(self, name):
+        """根據名稱獲取引擎"""
+        return self.engines.get(name)
 
 class TextPreview:
     """文字預覽類，用於從Word和PDF中提取文字並顯示"""
     
     def __init__(self):
-        self.ocr = QwenOCR()
+        self.ocr_manager = OCRManager()
+    
+    @property
+    def ocr(self):
+        """獲取當前OCR引擎"""
+        return self.ocr_manager.get_current_engine()
+    
+    def set_ocr_engine(self, engine_name):
+        """設置OCR引擎"""
+        return self.ocr_manager.set_engine(engine_name)
     
     def extract_word_content(self, file):
         """從Word文件中提取文字，識別目錄項目
@@ -258,7 +463,7 @@ class TextPreview:
         return paragraphs
     
     def extract_pdf_content(self, file):
-        """從PDF文件中提取文字，使用Qwen OCR API
+        """從PDF文件中提取文字，使用當前OCR引擎
         
         參數:
             file: 上傳的PDF文件
@@ -275,9 +480,9 @@ class TextPreview:
         doc = fitz.open(temp_file)
         paragraphs = []
         
-        # 提取模式信息
-        ocr_mode = "免費API" if self.ocr.should_use_free_api() else "官方API"
-        st.info(f"使用 {ocr_mode} 進行OCR文本提取...")
+        # 提取OCR引擎信息
+        current_engine = self.ocr_manager.get_current_engine()
+        st.info(f"使用 {current_engine.name} 進行OCR文本提取...")
         
         # 處理每一頁
         for page_num, page in enumerate(doc):
@@ -285,8 +490,8 @@ class TextPreview:
             pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
             img_bytes = pix.tobytes(output="png")
             
-            # 使用Qwen OCR獲取文本
-            text = self.ocr.extract_text(img_bytes)
+            # 使用當前OCR引擎獲取文本
+            text = current_engine.extract_text(img_bytes)
             
             if text:
                 # 分割文本為段落
