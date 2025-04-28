@@ -15,7 +15,7 @@ import traceback
 # 嘗試導入所需庫，避免在部署時出現問題
 try:
     # 主要功能模塊
-    from comparison_algorithm import compare_pdf_word
+    from comparison_algorithm import compare_documents
     
     # OCR相關庫
     import pytesseract
@@ -29,6 +29,71 @@ except ImportError as e:
     if "text_preview" in str(e) or "table_processor" in str(e) or "comparison_algorithm" in str(e):
         st.error("核心模塊缺失，應用無法運行")
         st.stop()
+
+# 創建比對函數，用於比較PDF和Word內容
+def compare_pdf_word(source_content, target_content, similarity_threshold=0.7):
+    """比較源內容和目標內容，返回比對結果
+    
+    參數:
+        source_content: 源內容段落列表
+        target_content: 目標內容段落列表
+        similarity_threshold: 相似度閾值
+        
+    返回:
+        比對結果列表
+    """
+    try:
+        # 嘗試使用comparison_algorithm中的函數
+        from comparison_algorithm import compare_documents
+        results = compare_documents(
+            word_paragraphs=source_content,
+            pdf_paragraphs=target_content,
+            similarity_threshold=similarity_threshold
+        )
+        
+        if results and "matches" in results:
+            # 格式化結果
+            formatted_results = []
+            for match in results["matches"]:
+                formatted_results.append({
+                    "pdf_content": match.get("pdf_text", ""),
+                    "pdf_page": match.get("pdf_page", "N/A"),
+                    "word_content": match.get("word_text", ""),
+                    "similarity": match.get("similarity", 0.0)
+                })
+            return formatted_results
+        return []
+    except Exception as e:
+        # 如果發生錯誤，使用簡單的備用方法
+        st.warning(f"使用核心比對算法時出錯: {str(e)}，使用簡單比對替代")
+        formatted_results = []
+        
+        # 簡單比對邏輯
+        for source_para in source_content:
+            best_match = None
+            best_sim = 0.0
+            
+            for target_para in target_content:
+                source_text = source_para.get("content", "")
+                target_text = target_para.get("content", "")
+                
+                # 使用difflib進行簡單比對
+                sim = difflib.SequenceMatcher(None, source_text, target_text).ratio()
+                
+                if sim > best_sim and sim >= similarity_threshold:
+                    best_sim = sim
+                    best_match = target_para
+            
+            # 如果找到匹配，添加到結果
+            if best_match:
+                formatted_results.append({
+                    "pdf_content": best_match.get("content", ""),
+                    "pdf_page": best_match.get("page_num", "N/A"),
+                    "word_content": source_para.get("content", ""),
+                    "similarity": best_sim
+                })
+                
+        return formatted_results
 
 def main():
     # 設定頁面
