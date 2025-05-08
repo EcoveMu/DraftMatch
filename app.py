@@ -84,6 +84,44 @@ def main():
     
     /* 移除滾動監視點相關樣式 */
     
+    /* 新增 Word 原稿滾動區域樣式 */
+    .word-scroll-panel {
+        background-color: #f5f7fa;
+        padding: 8px;
+        border-left: 3px solid #4e8cff;
+        max-height: 150px;
+        overflow-y: auto;
+        margin-bottom: 10px;
+        font-family: monospace;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+    
+    /* 表格在滾動區域中的樣式 */
+    .word-scroll-panel table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85em;
+    }
+    
+    .word-scroll-panel table th {
+        background-color: #f1f3f5;
+        padding: 5px;
+        border: 1px solid #dee2e6;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+    
+    .word-scroll-panel table td {
+        padding: 4px;
+        border: 1px solid #dee2e6;
+    }
+    
+    .word-scroll-panel table tr:nth-child(even) {
+        background-color: #f8f9fa;
+    }
+    
     /* 修改差異標示的顯示樣式 */
     .diff-content {
         margin-top: 15px;
@@ -349,11 +387,9 @@ def main():
                             with st.expander(f"匹配 #{i+1} (相似度: {match['similarity']:.2%})", expanded=True):
                                 st.write(f"PDF 頁碼: {match['pdf_page']}")
                                 
-                                # 添加 Word 原稿顯示區域
-                                st.markdown('<div class="word-original-content" style="background-color: #f0f7ff; padding: 12px; border: 1px solid #b3d1ff; border-radius: 4px; margin-bottom: 15px;">', unsafe_allow_html=True)
-                                st.markdown('<div style="font-weight: 600; margin-bottom: 5px; color: #0366d6;">Word 原稿:</div>', unsafe_allow_html=True)
-                                st.markdown(f'<div style="background-color: #fffdf7; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; white-space: pre-wrap; word-break: break-word;">{html.escape(match["word_text"])}</div>', unsafe_allow_html=True)
-                                st.markdown('</div>', unsafe_allow_html=True)
+                                # 移除藍色框，改為直接在匹配標題下顯示Word原稿
+                                st.markdown('<div style="font-size: 0.9rem; font-weight: 500; margin-bottom: 3px; color: #1e88e5;">Word 原稿:</div>', unsafe_allow_html=True)
+                                st.markdown(f'<div class="word-scroll-panel">{html.escape(match["word_text"])}</div>', unsafe_allow_html=True)
                                 
                                 # 根據設置顯示差異標示
                                 st.markdown('<div class="diff-content">', unsafe_allow_html=True)
@@ -444,13 +480,11 @@ def main():
                                         
                                         # 創建 Word 表格的 HTML 表示並直接顯示
                                         word_table_df = pd.DataFrame(result['word_table']['data'])
-                                        word_table_html = word_table_df.to_html(index=False, classes='table table-bordered')
+                                        word_table_html = word_table_df.to_html(index=False, classes='table table-bordered table-sm')
                                         
-                                        # 顯示 Word 表格
-                                        st.markdown('<div class="word-original-table" style="background-color: #f0f7ff; padding: 12px; border: 1px solid #b3d1ff; border-radius: 4px; margin-bottom: 15px;">', unsafe_allow_html=True)
-                                        st.markdown('<div style="font-weight: 600; margin-bottom: 5px; color: #0366d6;">Word 表格:</div>', unsafe_allow_html=True)
-                                        st.markdown(f'<div style="background-color: #fffdf7; padding: 10px; border: 1px solid #ddd; border-radius: 4px; overflow-x: auto;">{word_table_html}</div>', unsafe_allow_html=True)
-                                        st.markdown('</div>', unsafe_allow_html=True)
+                                        # 使用更緊湊的樣式顯示 Word 表格
+                                        st.markdown('<div style="font-size: 0.9rem; font-weight: 500; margin-bottom: 3px; color: #1e88e5;">Word 表格:</div>', unsafe_allow_html=True)
+                                        st.markdown(f'<div class="word-scroll-panel">{word_table_html}</div>', unsafe_allow_html=True)
                                         
                                         # 顯示 PDF 表格
                                         st.markdown("**PDF 表格**")
