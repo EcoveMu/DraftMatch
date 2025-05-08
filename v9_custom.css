@@ -1,0 +1,409 @@
+/* 主要顏色變量 */
+:root {
+    --primary-color: #1E88E5;
+    --primary-dark: #0D47A1;
+    --primary-light: #E3F2FD;
+    --secondary-color: #26A69A;
+    --secondary-dark: #00796B;
+    --secondary-light: #B2DFDB;
+    --warning-color: #FFC107;
+    --warning-light: #FFF9C4;
+    --error-color: #F44336;
+    --error-light: #FFCDD2;
+    --success-color: #4CAF50;
+    --success-light: #C8E6C9;
+    --text-color: #212121;
+    --text-secondary: #757575;
+    --background-color: #FFFFFF;
+    --background-secondary: #F5F5F5;
+    --border-color: #E0E0E0;
+}
+
+/* 主要標題 */
+.main-header {
+    color: var(--primary-color);
+    font-size: 2.5rem;
+    margin-bottom: 20px;
+    font-weight: 600;
+    text-align: center;
+    padding: 15px 0;
+    border-bottom: 2px solid var(--primary-light);
+}
+
+/* 次要標題 */
+.sub-header {
+    color: var(--primary-dark);
+    font-size: 1.8rem;
+    margin-top: 30px;
+    margin-bottom: 15px;
+    font-weight: 500;
+    padding-left: 10px;
+    border-left: 4px solid var(--primary-color);
+}
+
+/* 差異顯示樣式 */
+.diff-char-removed {
+    background-color: var(--error-light);
+    text-decoration: line-through;
+    padding: 0 2px;
+    border-radius: 2px;
+    animation: highlight-removed 2s ease-in-out;
+}
+
+.diff-char-added {
+    background-color: var(--success-light);
+    padding: 0 2px;
+    border-radius: 2px;
+    animation: highlight-added 2s ease-in-out;
+}
+
+.diff-word-removed {
+    background-color: #EF9A9A;
+    text-decoration: line-through;
+    padding: 2px;
+    margin: 2px;
+    border-radius: 3px;
+    animation: highlight-removed 2s ease-in-out;
+}
+
+.diff-word-added {
+    background-color: #A5D6A7;
+    padding: 2px;
+    margin: 2px;
+    border-radius: 3px;
+    animation: highlight-added 2s ease-in-out;
+}
+
+/* 動畫效果 */
+@keyframes highlight-removed {
+    0% { background-color: rgba(244, 67, 54, 0.8); }
+    100% { background-color: var(--error-light); }
+}
+
+@keyframes highlight-added {
+    0% { background-color: rgba(76, 175, 80, 0.8); }
+    100% { background-color: var(--success-light); }
+}
+
+/* 表格警告樣式 */
+.table-warning {
+    background-color: var(--warning-light);
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 15px;
+    border-left: 4px solid var(--warning-color);
+    font-weight: 500;
+}
+
+/* API Key 輸入樣式 */
+.api-key-input {
+    margin-top: 15px;
+    margin-bottom: 15px;
+    padding: 10px;
+    border-radius: 5px;
+    background-color: #F8F9FA;
+    border: 1px solid var(--border-color);
+}
+
+/* AI 模型區域樣式 */
+.ai-model-section {
+    background-color: var(--primary-light);
+    padding: 15px;
+    border-radius: 5px;
+    margin-top: 15px;
+    margin-bottom: 15px;
+    border: 1px solid rgba(30, 136, 229, 0.3);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+/* 結果卡片樣式 */
+.result-card {
+    background-color: var(--background-color);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.result-card:hover {
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
+}
+
+.result-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 10px;
+}
+
+.result-card-title {
+    font-weight: 600;
+    color: var(--primary-dark);
+}
+
+.result-card-similarity {
+    font-weight: 500;
+    padding: 5px 10px;
+    border-radius: 15px;
+    font-size: 0.9rem;
+}
+
+.similarity-high {
+    background-color: var(--success-light);
+    color: var(--success-color);
+}
+
+.similarity-medium {
+    background-color: var(--warning-light);
+    color: var(--warning-color);
+}
+
+.similarity-low {
+    background-color: var(--error-light);
+    color: var(--error-color);
+}
+
+/* 統計卡片樣式 */
+.stats-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.stat-card {
+    flex: 1;
+    min-width: 200px;
+    background-color: var(--background-color);
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    margin: 10px 0;
+}
+
+.stat-label {
+    font-size: 1rem;
+    color: var(--text-secondary);
+}
+
+.stat-card.match-rate {
+    background-color: var(--primary-light);
+}
+
+.stat-card.total {
+    background-color: var(--secondary-light);
+}
+
+.stat-card.matched {
+    background-color: var(--success-light);
+}
+
+.stat-card.unmatched {
+    background-color: var(--error-light);
+}
+
+/* 篩選工具欄樣式 */
+.filter-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 15px;
+    background-color: var(--background-secondary);
+    border-radius: 5px;
+    margin-bottom: 20px;
+    align-items: center;
+}
+
+.filter-label {
+    font-weight: 500;
+    margin-right: 5px;
+}
+
+/* 導航欄樣式 */
+.nav-container {
+    position: sticky;
+    top: 0;
+    background-color: var(--background-color);
+    z-index: 100;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 20px;
+}
+
+.nav-links {
+    display: flex;
+    gap: 15px;
+    overflow-x: auto;
+    padding-bottom: 5px;
+}
+
+.nav-link {
+    padding: 8px 15px;
+    background-color: var(--background-secondary);
+    border-radius: 20px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.nav-link:hover, .nav-link.active {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+/* 提示和引導樣式 */
+.tip-box {
+    background-color: var(--primary-light);
+    border-left: 4px solid var(--primary-color);
+    padding: 15px;
+    margin: 15px 0;
+    border-radius: 5px;
+}
+
+.tip-title {
+    font-weight: 600;
+    margin-bottom: 5px;
+    color: var(--primary-dark);
+}
+
+/* 響應式設計調整 */
+@media (max-width: 768px) {
+    .main-header {
+        font-size: 2rem;
+    }
+    
+    .sub-header {
+        font-size: 1.5rem;
+    }
+    
+    .stats-container {
+        flex-direction: column;
+    }
+    
+    .stat-card {
+        min-width: 100%;
+    }
+}
+
+/* 加載動畫 */
+.loading-animation {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.loading-spinner {
+    width: 50px;
+    height: 50px;
+    border: 5px solid var(--primary-light);
+    border-top: 5px solid var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* 表格樣式增強 */
+.comparison-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 15px 0;
+}
+
+.comparison-table th {
+    background-color: var(--primary-light);
+    color: var(--primary-dark);
+    padding: 10px;
+    text-align: left;
+    font-weight: 600;
+}
+
+.comparison-table td {
+    padding: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.comparison-table tr:nth-child(even) {
+    background-color: var(--background-secondary);
+}
+
+.comparison-table tr:hover {
+    background-color: rgba(30, 136, 229, 0.1);
+}
+
+/* 按鈕樣式增強 */
+.custom-button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.custom-button:hover {
+    background-color: var(--primary-dark);
+    transform: translateY(-2px);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.custom-button.secondary {
+    background-color: var(--secondary-color);
+}
+
+.custom-button.secondary:hover {
+    background-color: var(--secondary-dark);
+}
+
+.custom-button.warning {
+    background-color: var(--warning-color);
+    color: var(--text-color);
+}
+
+.custom-button.warning:hover {
+    background-color: #FFB300;
+}
+
+.custom-button.error {
+    background-color: var(--error-color);
+}
+
+.custom-button.error:hover {
+    background-color: #D32F2F;
+}
+
+/* 圖表容器 */
+.chart-container {
+    background-color: var(--background-color);
+    border-radius: 8px;
+    padding: 15px;
+    margin: 20px 0;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.chart-title {
+    font-weight: 600;
+    color: var(--primary-dark);
+    margin-bottom: 15px;
+    text-align: center;
+}
