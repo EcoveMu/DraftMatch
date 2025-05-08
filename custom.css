@@ -426,3 +426,24 @@
     margin-top: 0.5rem !important;
     margin-bottom: 0.5rem !important;
 }
+
+/* Word原稿面板樣式 - 可調整大小 */
+.word-scroll-panel {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 10px;
+    font-family: monospace;
+    white-space: pre-wrap;
+    overflow: auto;
+    min-height: 100px;
+    max-height: 300px;
+    resize: both !important;    /* 允許調整大小 */
+    overflow: auto !important;  /* 確保超出部分能夠滾動 */
+}
+
+/* 調整光標在邊緣處的顯示效果 */
+.word-scroll-panel:hover {
+    cursor: se-resize;
+    border-color: var(--primary-color);
+}
