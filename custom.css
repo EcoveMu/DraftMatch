@@ -407,3 +407,22 @@
     margin-bottom: 15px;
     text-align: center;
 }
+
+/* 匹配區塊容器樣式 - 移除上下空白 */
+.match-block {
+    margin-bottom: -20px;
+}
+
+/* 改進expander樣式，移除額外空間 */
+.st-emotion-cache-1r6slb0 {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+/* 調整expander內部空間 */
+.st-emotion-cache-ue6h4q {
+    margin-top: 0.5rem !important;
+    margin-bottom: 0.5rem !important;
+}
