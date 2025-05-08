@@ -60,6 +60,8 @@ def main():
         st.session_state.ocr_api_key = ""
     if 'use_enhanced_diff' not in st.session_state:
         st.session_state.use_enhanced_diff = True
+    if 'similarity_threshold' not in st.session_state:
+        st.session_state.similarity_threshold = 0.85
     
     # 側邊欄設定
     with st.sidebar:
@@ -103,6 +105,16 @@ def main():
         st.session_state.use_enhanced_diff = st.checkbox("使用增強型差異標示", 
                                                           value=st.session_state.use_enhanced_diff,
                                                           help="啟用後，以PDF內容為主，灰色表示相同內容，紅色表示不同內容")
+        
+        if st.session_state.use_enhanced_diff:
+            st.session_state.similarity_threshold = st.slider(
+                "相似度閾值", 
+                min_value=0.7, 
+                max_value=0.95, 
+                value=st.session_state.similarity_threshold,
+                step=0.05,
+                help="調整文本相似度的判斷標準，值越高要求越嚴格，相同內容越少"
+            )
     
     # 檔案上傳區
     col1, col2 = st.columns(2)

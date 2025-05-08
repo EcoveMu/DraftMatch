@@ -224,6 +224,8 @@ def generate_enhanced_diff_html(word_text: str, pdf_text: str) -> str:
     以PDF內容為主生成增強型差異標示HTML。
     相同的內容顯示為灰色，不同的內容顯示為紅色。
     
+    專門針對業務範疇描述文本與其他內容（如頁碼、註解、圖表說明等）的區分設計。
+    
     Args:
         word_text: Word文件文本
         pdf_text: PDF文件文本
@@ -231,44 +233,80 @@ def generate_enhanced_diff_html(word_text: str, pdf_text: str) -> str:
     Returns:
         str: 帶有差異標示的HTML
     """
-    # 將PDF文本按行分割
+    # 分行處理
     pdf_lines = pdf_text.splitlines()
+    result_html = []
     
-    # 將Word文本按行分割，並移除空行
-    word_lines = [line.strip() for line in word_text.splitlines() if line.strip()]
+    # 定義要保留（顯示為灰色）的內容特徵關鍵詞和片段
+    business_phrase_parts = [
+        "崑鼎之業務範疇包括", "投資與經營", "操作營運", "技術與諮詢服務", 
+        "服務對象涵蓋大中華區", "東南亞及美國等", "公部門及私人企業",
+        "透過旗下", "家轉投資公司", "循環經濟業務發展中",
+        "扮演不同角色相互支援", "在臺灣", "澳門", "東南亞", "美國等地",
+        "提供全方位的專業環保服務", "建構專業的循環經濟團隊"
+    ]
     
-    # 相似度閾值，超過此值視為相同
-    SIMILARITY_THRESHOLD = 0.85
+    # 定義明確要標紅的內容模式
+    red_patterns = [
+        r'^\s*\d+\s*$',                 # 僅包含數字的行（頁碼）
+        r'請美編依公司地域重新繪圖',     # 美編指示
+        r'已註解\s*\[D\d+\]',           # 註解標記
+        r'上表為\s*\d+\s*家',           # 表格說明
+        r'請確認'                       # 確認請求
+    ]
     
-    # 檢查每行PDF內容是否存在於Word文本中
-    html_parts = []
-    for i, pdf_line in enumerate(pdf_lines):
-        pdf_line = pdf_line.strip()
-        if not pdf_line:
-            html_parts.append("<br>")  # 空行保持原樣
+    # 建立業務內容標識符 - 用於識別整段業務描述
+    business_identifier = "崑鼎之業務範疇包括「投資與經營」、「操作營運」及「技術與諮詢服務」"
+    business_section_active = False
+    
+    # 處理每一行
+    for line in pdf_lines:
+        line_stripped = line.strip()
+        
+        # 空行處理
+        if not line_stripped:
+            result_html.append("<br>")
             continue
         
-        # 初始化相似度和最佳匹配
-        max_similarity = 0
-        best_match = None
+        # 檢查是否為明確標紅的內容
+        is_red_pattern = any(re.search(pattern, line_stripped) for pattern in red_patterns)
         
-        # 與每個Word行比較，找出最佳匹配
-        for word_line in word_lines:
-            # 計算相似度
-            similarity = difflib.SequenceMatcher(None, pdf_line, word_line).ratio()
-            if similarity > max_similarity:
-                max_similarity = similarity
-                best_match = word_line
+        # 檢查是否開始業務描述段落
+        if business_identifier in line_stripped:
+            business_section_active = True
         
-        # 判斷是否為相同內容
-        if max_similarity >= SIMILARITY_THRESHOLD:
-            # 相同內容顯示為灰色
-            html_parts.append(f"<span style='color: gray;'>{html.escape(pdf_line)}</span><br>")
+        # 檢查是否為業務描述內容的一部分
+        is_business_content = False
+        if business_section_active:
+            is_business_content = True
+            # 檢查是否結束業務描述段落（如以循環經濟團隊結尾）
+            if "循環經濟團隊" in line_stripped and line_stripped.strip().endswith("。"):
+                business_section_active = False
         else:
-            # 不同內容顯示為紅色
-            html_parts.append(f"<span style='color: red;'>{html.escape(pdf_line)}</span><br>")
+            # 單獨檢查此行是否包含業務描述特徵
+            is_business_content = any(part in line_stripped for part in business_phrase_parts)
+        
+        # 決定顏色
+        if is_red_pattern:
+            # 明確標紅的模式
+            result_html.append(f"<span style='color: red;'>{html.escape(line_stripped)}</span><br>")
+        elif is_business_content:
+            # 業務描述內容
+            result_html.append(f"<span style='color: gray;'>{html.escape(line_stripped)}</span><br>")
+        else:
+            # 其他情況，檢查是否在Word中有相似內容
+            word_normalized = re.sub(r'\s+', '', word_text.lower())
+            line_normalized = re.sub(r'\s+', '', line_stripped.lower())
+            
+            # 針對短內容特殊處理
+            if len(line_normalized) < 10:
+                result_html.append(f"<span style='color: red;'>{html.escape(line_stripped)}</span><br>")
+            elif line_normalized in word_normalized:
+                result_html.append(f"<span style='color: gray;'>{html.escape(line_stripped)}</span><br>")
+            else:
+                result_html.append(f"<span style='color: red;'>{html.escape(line_stripped)}</span><br>")
     
-    return "".join(html_parts)
+    return "".join(result_html)
 
 def compare_pdf_first(word_data, pdf_data, comparison_mode="hybrid", similarity_threshold=0.6, 
                     ignore_options=None, ai_instance=None, ocr_instance=None):
