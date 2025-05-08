@@ -58,44 +58,19 @@ def main():
         max-width: 100%;
     }
     
-    /* 修復 Streamlit 滾動容器，允許 sticky 元素 */
-    .main, .block-container, [data-testid="stAppViewContainer"], 
+    /* 不再需要修復 Streamlit 滾動容器 */
+    /* .main, .block-container, [data-testid="stAppViewContainer"], 
     .stApp, section[data-testid="stSidebar"] {
         overflow: visible !important;
-    }
+    } */
     
-    /* 自定義 Word 原稿固定頂部顯示 */
-    .word-sticky-container {
-        position: fixed;
-        top: 2.8rem;
-        left: 5%;
-        width: 90%;
-        z-index: 1000;
-        background-color: #f9f9f9;
-        padding: 10px;
-        border-radius: 5px;
-        border: 1px solid #e0e0e0;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        max-height: 33vh;
-        overflow-y: auto;
-    }
+    /* 移除舊的 Word 原稿固定顯示相關樣式 */
     
-    /* 為固定區域添加標題樣式 */
-    .word-sticky-header {
-        margin-top: 0;
-        margin-bottom: 8px;
-        font-size: 1rem;
-        font-weight: 600;
-        color: #333;
-        border-bottom: 1px solid #eee;
-        padding-bottom: 5px;
-    }
-    
-    /* 留出頂部空間，避免內容被固定元素遮擋 */
-    .match-content-container {
+    /* 不再需要留出頂部空間 */
+    /* .match-content-container {
         margin-top: calc(33vh + 100px);
         position: relative;
-    }
+    } */
     
     /* 匹配區塊樣式 */
     .match-block {
@@ -107,20 +82,7 @@ def main():
         background-color: white;
     }
     
-    /* 自動切換 Word 原稿的滾動監視點 */
-    .word-switch-point {
-        position: absolute;
-        top: -120px;
-        height: 1px;
-        width: 100%;
-        background: transparent;
-    }
-    
-    /* 確保文本區域在 sticky 容器中正確顯示 */
-    .word-sticky-container > div {
-        width: 100%;
-        max-width: 100%;
-    }
+    /* 移除滾動監視點相關樣式 */
     
     /* 修改差異標示的顯示樣式 */
     .diff-content {
@@ -129,6 +91,16 @@ def main():
         border-radius: 5px;
         border: 1px solid #f0f0f0;
         background-color: white;
+    }
+    
+    /* 新增 Word 原稿區域樣式 */
+    .word-original-content, .word-original-table {
+        background-color: #f8f9fa;
+        padding: 12px 15px;
+        border-radius: 5px;
+        border: 1px solid #dee2e6;
+        margin-bottom: 15px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
     
     /* 調整文本區域樣式 */
@@ -160,24 +132,27 @@ def main():
         border-radius: 0 0 5px 5px;
     }
     
-    /* 自定義按鈕樣式 - 有質感的漸變效果 */
+    /* 自定義按鈕樣式 - 深色霧藍漸層效果 */
     .stButton > button[data-testid="baseButton-primary"] {
-        background-image: linear-gradient(to right, #3a7bd5, #3a6073) !important;
+        background-image: linear-gradient(to right, #2c3e50, #4a6790) !important;
+        background-color: #2c3e50 !important;
         border: none !important;
         color: white !important;
         font-weight: bold !important;
-        padding: 0.5rem 1rem !important;
+        padding: 0.6rem 1.2rem !important;
         border-radius: 5px !important;
         transition: all 0.3s ease !important;
         box-shadow: 0 4px 6px rgba(50, 50, 93, 0.11), 0 1px 3px rgba(0, 0, 0, 0.08) !important;
     }
     
     .stButton > button[data-testid="baseButton-primary"]:hover {
+        background-image: linear-gradient(to right, #34495e, #546e8c) !important;
         box-shadow: 0 7px 14px rgba(50, 50, 93, 0.1), 0 3px 6px rgba(0, 0, 0, 0.08) !important;
         transform: translateY(-1px) !important;
     }
     
     .stButton > button[data-testid="baseButton-primary"]:active {
+        background-image: linear-gradient(to right, #243342, #3d5978) !important;
         box-shadow: 0 3px 6px rgba(50, 50, 93, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08) !important;
         transform: translateY(1px) !important;
     }
@@ -328,11 +303,9 @@ def main():
             
             # 上方比對按鈕
             st.write("---")
-            st.markdown("### 文字比對操作")
-            st.info("點擊下方按鈕開始進行文字比對分析")
             top_col1, top_col2, top_col3 = st.columns([1, 2, 1])
             with top_col2:
-                top_compare_button = st.button("🔍 開始文字比對", key="start_text_comparison_top", 
+                top_compare_button = st.button("開始文字比對", key="start_text_comparison_top", 
                                            use_container_width=True, 
                                            type="primary")
             st.write("---")
@@ -341,12 +314,6 @@ def main():
             start_comparison = False
             if top_compare_button:
                 start_comparison = True
-                
-            # 替換底部比對按鈕區域為返回頂部提示
-            st.write("---")
-            st.markdown("### 回到頂部繼續操作")
-            st.info("如需進行新的比對，請回到頁面頂部點擊「開始文字比對」按鈕")
-            st.write("---")
             
             # 如果任一按鈕被點擊，執行比對
             if start_comparison:
@@ -371,67 +338,22 @@ def main():
                     with col3:
                         st.metric("未匹配段落", results['statistics']['unmatched_pdf'] + results['statistics']['unmatched_word'])
                     
-                    # 創建一個全局的 Word 原稿固定顯示區域
-                    st.markdown('<div id="global-word-container" class="word-sticky-container">', unsafe_allow_html=True)
-                    st.markdown('<div class="word-sticky-header">Word 原稿</div>', unsafe_allow_html=True)
-                    st.markdown('<div id="current-word-content" style="background-color: #fffdf7; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; white-space: pre-wrap; word-break: break-word;"></div>', unsafe_allow_html=True)
-                    st.markdown('</div>', unsafe_allow_html=True)
-                    
-                    # 添加 JavaScript 代碼來監視滾動並更新 Word 原稿內容
-                    js_code = """
-                    <script>
-                    // 在頁面載入後執行
-                    document.addEventListener('DOMContentLoaded', function() {
-                        // 獲取固定顯示區域的內容容器
-                        const wordContentContainer = document.getElementById('current-word-content');
-                        // 獲取所有的 Word 原稿內容
-                        const wordContents = document.querySelectorAll('.word-content');
-                        // 獲取所有的切換點
-                        const switchPoints = document.querySelectorAll('.word-switch-point');
-                        
-                        // 設置初始內容
-                        if (wordContents.length > 0) {
-                            wordContentContainer.innerHTML = wordContents[0].innerHTML;
-                        }
-                        
-                        // 監聽滾動事件
-                        window.addEventListener('scroll', function() {
-                            // 獲取視窗頂部距離
-                            const scrollTop = window.scrollY;
-                            // 查找現在應該顯示哪個 Word 原稿
-                            let activeIndex = 0;
-                            
-                            switchPoints.forEach((point, index) => {
-                                const pointTop = point.getBoundingClientRect().top + window.scrollY;
-                                if (scrollTop >= pointTop) {
-                                    activeIndex = index;
-                                }
-                            });
-                            
-                            // 更新顯示的 Word 原稿內容
-                            if (wordContents[activeIndex]) {
-                                wordContentContainer.innerHTML = wordContents[activeIndex].innerHTML;
-                            }
-                        });
-                    });
-                    </script>
-                    """
-                    st.markdown(js_code, unsafe_allow_html=True)
-                    
                     # 詳細結果
                     if results['matches']:
                         for i, match in enumerate(results['matches']):
                             # 創建匹配區塊的容器
                             st.markdown(f'<div class="match-block">', unsafe_allow_html=True)
                             
-                            # 添加滾動監視點，用於切換 Word 原稿
-                            st.markdown(f'<div id="switch-point-{i}" class="word-switch-point"></div>', unsafe_allow_html=True)
+                            # 移除滾動監視點，不再需要
                             
                             with st.expander(f"匹配 #{i+1} (相似度: {match['similarity']:.2%})", expanded=True):
                                 st.write(f"PDF 頁碼: {match['pdf_page']}")
                                 
-                                # 儲存 Word 原稿內容，但不在這裡顯示
-                                st.markdown(f'<div class="word-content" style="display:none;">{html.escape(match["word_text"])}</div>', unsafe_allow_html=True)
+                                # 添加 Word 原稿顯示區域
+                                st.markdown('<div class="word-original-content" style="background-color: #f0f7ff; padding: 12px; border: 1px solid #b3d1ff; border-radius: 4px; margin-bottom: 15px;">', unsafe_allow_html=True)
+                                st.markdown('<div style="font-weight: 600; margin-bottom: 5px; color: #0366d6;">Word 原稿:</div>', unsafe_allow_html=True)
+                                st.markdown(f'<div style="background-color: #fffdf7; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; white-space: pre-wrap; word-break: break-word;">{html.escape(match["word_text"])}</div>', unsafe_allow_html=True)
+                                st.markdown('</div>', unsafe_allow_html=True)
                                 
                                 # 根據設置顯示差異標示
                                 st.markdown('<div class="diff-content">', unsafe_allow_html=True)
@@ -474,11 +396,9 @@ def main():
                 if word_tables and pdf_tables:
                     # 上方表格比對按鈕
                     st.write("---")
-                    st.markdown("### 表格比對操作")
-                    st.info("點擊下方按鈕開始進行表格比對分析")
                     table_top_col1, table_top_col2, table_top_col3 = st.columns([1, 2, 1])
                     with table_top_col2:
-                        table_top_compare_button = st.button("📊 開始表格比對", key="start_table_comparison_top", 
+                        table_top_compare_button = st.button("開始表格比對", key="start_table_comparison_top", 
                                                 use_container_width=True, 
                                                 type="primary")
                     st.write("---")
@@ -487,12 +407,6 @@ def main():
                     start_table_comparison = False
                     if table_top_compare_button:
                         start_table_comparison = True
-                    
-                    # 替換底部表格比對按鈕區域為返回頂部提示
-                    st.write("---")
-                    st.markdown("### 回到頂部繼續操作")
-                    st.info("如需進行新的比對，請回到頁面頂部點擊「開始表格比對」按鈕")
-                    st.write("---")
                     
                     # 如果任一按鈕被點擊，執行表格比對
                     if start_table_comparison:
@@ -516,70 +430,27 @@ def main():
                             # 顯示比對結果
                             st.subheader("表格比對結果")
                             
-                            # 創建一個全局的 Word 表格固定顯示區域
-                            st.markdown('<div id="global-word-table-container" class="word-sticky-container">', unsafe_allow_html=True)
-                            st.markdown('<div class="word-sticky-header">Word 表格</div>', unsafe_allow_html=True)
-                            st.markdown('<div id="current-word-table" style="background-color: #fffdf7; padding: 10px; border: 1px solid #ddd; border-radius: 4px; overflow-x: auto;"></div>', unsafe_allow_html=True)
-                            st.markdown('</div>', unsafe_allow_html=True)
-                            
-                            # 添加 JavaScript 代碼來監視滾動並更新 Word 表格內容
-                            js_table_code = """
-                            <script>
-                            // 在頁面載入後執行
-                            document.addEventListener('DOMContentLoaded', function() {
-                                // 獲取固定顯示區域的內容容器
-                                const wordTableContainer = document.getElementById('current-word-table');
-                                // 獲取所有的 Word 表格內容
-                                const wordTables = document.querySelectorAll('.word-table-content');
-                                // 獲取所有的切換點
-                                const tableSwitchPoints = document.querySelectorAll('.table-switch-point');
-                                
-                                // 設置初始內容
-                                if (wordTables.length > 0) {
-                                    wordTableContainer.innerHTML = wordTables[0].innerHTML;
-                                }
-                                
-                                // 監聽滾動事件
-                                window.addEventListener('scroll', function() {
-                                    // 獲取視窗頂部距離
-                                    const scrollTop = window.scrollY;
-                                    // 查找現在應該顯示哪個 Word 表格
-                                    let activeIndex = 0;
-                                    
-                                    tableSwitchPoints.forEach((point, index) => {
-                                        const pointTop = point.getBoundingClientRect().top + window.scrollY;
-                                        if (scrollTop >= pointTop) {
-                                            activeIndex = index;
-                                        }
-                                    });
-                                    
-                                    // 更新顯示的 Word 表格內容
-                                    if (wordTables[activeIndex]) {
-                                        wordTableContainer.innerHTML = wordTables[activeIndex].innerHTML;
-                                    }
-                                });
-                            });
-                            </script>
-                            """
-                            st.markdown(js_table_code, unsafe_allow_html=True)
+                            # 移除全局的 Word 表格固定顯示區域
                             
                             if table_results:
                                 for i, result in enumerate(table_results):
                                     # 創建表格匹配區塊的容器
                                     st.markdown(f'<div class="match-block">', unsafe_allow_html=True)
                                     
-                                    # 添加滾動監視點，用於切換 Word 表格
-                                    st.markdown(f'<div id="table-switch-point-{i}" class="table-switch-point"></div>', unsafe_allow_html=True)
+                                    # 移除滾動監視點
                                     
                                     with st.expander(f"表格匹配 #{i+1} (相似度: {result['similarity']:.2%})", expanded=True):
                                         st.write(f"Word 表格 {result['word_table']['index'] + 1} 與 PDF 表格 {result['pdf_table']['index'] + 1}")
                                         
-                                        # 創建 Word 表格的 HTML 表示
+                                        # 創建 Word 表格的 HTML 表示並直接顯示
                                         word_table_df = pd.DataFrame(result['word_table']['data'])
                                         word_table_html = word_table_df.to_html(index=False, classes='table table-bordered')
                                         
-                                        # 儲存 Word 表格內容，但不在這裡顯示
-                                        st.markdown(f'<div class="word-table-content" style="display:none;">{word_table_html}</div>', unsafe_allow_html=True)
+                                        # 顯示 Word 表格
+                                        st.markdown('<div class="word-original-table" style="background-color: #f0f7ff; padding: 12px; border: 1px solid #b3d1ff; border-radius: 4px; margin-bottom: 15px;">', unsafe_allow_html=True)
+                                        st.markdown('<div style="font-weight: 600; margin-bottom: 5px; color: #0366d6;">Word 表格:</div>', unsafe_allow_html=True)
+                                        st.markdown(f'<div style="background-color: #fffdf7; padding: 10px; border: 1px solid #ddd; border-radius: 4px; overflow-x: auto;">{word_table_html}</div>', unsafe_allow_html=True)
+                                        st.markdown('</div>', unsafe_allow_html=True)
                                         
                                         # 顯示 PDF 表格
                                         st.markdown("**PDF 表格**")
