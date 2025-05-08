@@ -47,6 +47,61 @@ def main():
     # 設定頁面
     st.set_page_config(page_title="文件比對系統", layout="wide")
     
+    # 注入自定義 CSS
+    st.markdown("""
+    <style>
+    /* 整體頁面樣式調整 */
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+    }
+    
+    /* 自定義 Word 原稿固定頂部顯示 */
+    .word-sticky-container {
+        position: sticky;
+        top: 0;
+        z-index: 999;
+        background-color: #f9f9f9;
+        padding: 8px;
+        border-radius: 5px;
+        margin-bottom: 15px;
+        border: 1px solid #eee;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    /* 修改差異標示的顯示樣式 */
+    .diff-content {
+        margin-top: 15px;
+        padding: 15px;
+        border-radius: 5px;
+        border: 1px solid #f0f0f0;
+        background-color: white;
+    }
+    
+    /* 調整文本區域樣式 */
+    .stTextArea textarea {
+        background-color: #fffdf7;
+        font-family: 'Courier New', monospace;
+        border: 1px solid #ddd;
+    }
+    
+    /* 調整匹配區域樣式 */
+    .streamlit-expanderHeader {
+        background-color: #f5f5f5;
+        border-radius: 5px;
+        padding: 5px 10px;
+        margin-bottom: 10px;
+    }
+    
+    /* 匹配內容的容器 */
+    .streamlit-expanderContent {
+        padding: 10px;
+        border: 1px solid #eee;
+        border-radius: 0 0 5px 5px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
     # 頁面標題
     st.title("文件比對系統")
     st.write("本系統用於比對 Word 原稿與 PDF 完稿，支援文字與表格比對，並可辨識無文字內容的文件。")
@@ -215,21 +270,26 @@ def main():
                             with st.expander(f"匹配 #{i+1} (相似度: {match['similarity']:.2%})"):
                                 st.write(f"PDF 頁碼: {match['pdf_page']}")
                                 
-                                c1, c2 = st.columns(2)
-                                with c1:
-                                    st.markdown("**Word 原稿**")
-                                    st.text_area("", match['word_text'], height=150, key=f"word_text_{i}")
-                                with c2:
-                                    st.markdown("**PDF 內容**")
-                                    st.text_area("", match['pdf_text'], height=150, key=f"pdf_text_{i}")
+                                # 計算 Word 原稿內容的高度，根據行數自動調整
+                                lines_count = len(match['word_text'].split('\n'))
+                                display_height = min(max(lines_count * 18, 150), 300)  # 最小150px，最大300px
+                                
+                                # 使用 HTML 組件創建具有固定頂部效果的 Word 原稿視窗
+                                st.markdown('<div class="word-sticky-container">', unsafe_allow_html=True)
+                                st.markdown("**Word 原稿**")
+                                st.text_area("", match['word_text'], height=display_height, key=f"word_text_{i}", 
+                                            help="這是 Word 原稿的內容，會固定在頂部以便參考")
+                                st.markdown('</div>', unsafe_allow_html=True)
                                 
                                 # 根據設置顯示差異標示
+                                st.markdown('<div class="diff-content">', unsafe_allow_html=True)
                                 if st.session_state.use_enhanced_diff:
-                                    st.markdown("**增強型差異標示 (PDF內容為主，灰色為相同，紅色為不同):**")
+                                    st.markdown("**PDF 內容差異標示** (灰色：相同內容，紅色：不同內容)")
                                     st.markdown(match['enhanced_diff_html'], unsafe_allow_html=True)
                                 else:
-                                    st.markdown("**標準差異標示:**")
+                                    st.markdown("**標準差異標示**")
                                     st.markdown(match['diff_html'], unsafe_allow_html=True)
+                                st.markdown('</div>', unsafe_allow_html=True)
                                 
                                 # 差異摘要
                                 if match.get('diff_summary'):

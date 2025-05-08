@@ -265,7 +265,7 @@ def generate_enhanced_diff_html(word_text: str, pdf_text: str) -> str:
         
         # 空行處理
         if not line_stripped:
-            result_html.append("<br>")
+            result_html.append("<div style='height: 1em;'></div>")
             continue
         
         # 檢查是否為明確標紅的內容
@@ -288,11 +288,11 @@ def generate_enhanced_diff_html(word_text: str, pdf_text: str) -> str:
         
         # 決定顏色
         if is_red_pattern:
-            # 明確標紅的模式
-            result_html.append(f"<span style='color: red;'>{html.escape(line_stripped)}</span><br>")
+            # 明確標紅的模式 - 使用較醒目的紅色樣式
+            result_html.append(f"<span style='color: #E53935; font-weight: 500; display: block; padding: 2px 0; background-color: #ffebee;'>{html.escape(line_stripped)}</span>")
         elif is_business_content:
-            # 業務描述內容
-            result_html.append(f"<span style='color: gray;'>{html.escape(line_stripped)}</span><br>")
+            # 業務描述內容 - 使用灰色
+            result_html.append(f"<span style='color: #707070; display: block; padding: 2px 0;'>{html.escape(line_stripped)}</span>")
         else:
             # 其他情況，檢查是否在Word中有相似內容
             word_normalized = re.sub(r'\s+', '', word_text.lower())
@@ -300,11 +300,11 @@ def generate_enhanced_diff_html(word_text: str, pdf_text: str) -> str:
             
             # 針對短內容特殊處理
             if len(line_normalized) < 10:
-                result_html.append(f"<span style='color: red;'>{html.escape(line_stripped)}</span><br>")
+                result_html.append(f"<span style='color: #E53935; font-weight: 500; display: block; padding: 2px 0; background-color: #ffebee;'>{html.escape(line_stripped)}</span>")
             elif line_normalized in word_normalized:
-                result_html.append(f"<span style='color: gray;'>{html.escape(line_stripped)}</span><br>")
+                result_html.append(f"<span style='color: #707070; display: block; padding: 2px 0;'>{html.escape(line_stripped)}</span>")
             else:
-                result_html.append(f"<span style='color: red;'>{html.escape(line_stripped)}</span><br>")
+                result_html.append(f"<span style='color: #E53935; font-weight: 500; display: block; padding: 2px 0; background-color: #ffebee;'>{html.escape(line_stripped)}</span>")
     
     return "".join(result_html)
 
