@@ -38,7 +38,7 @@ def extract_text_from_word(file):
             table_data.append(row_data)
         # 跳過完全空白的表格
         if any(any(cell for cell in row) for row in table_data):
-            # 嘗試獲取表格標題（表格前最近的段落中包含"表"或"Table"的作為標題）
+            # 嘗試獲取表格標題（表格前最近的段落中包含“表”或“Table”的作為標題）
             title = ""
             if paragraphs:
                 for j in range(len(paragraphs)-1, -1, -1):
@@ -279,68 +279,6 @@ def extract_text_from_pdf_with_ocr(file, ocr_engine="tesseract", ocr_instance=No
     os.rmdir(temp_dir)
     return {"paragraphs": all_paragraphs, "tables": all_tables}
 
-def enhanced_extract_tables_from_pdf(file) -> list:
-    """Enhanced function to extract tables from PDF with better table detection and title matching"""
-    # Create temp file
-    temp_dir = tempfile.mkdtemp()
-    temp_file_path = os.path.join(temp_dir, "temp.pdf")
-    with open(temp_file_path, "wb") as f:
-        f.write(file.getvalue())
-
-    pdf = pdfplumber.open(temp_file_path)
-    tables = []
-    paragraphs = []
-
-    # First pass: extract all paragraphs for title matching
-    for page_num, page in enumerate(pdf.pages, start=1):
-        text = page.extract_text()
-        if text:
-            page_paragraphs = text.split('\n\n')
-            for para in page_paragraphs:
-                para = para.strip()
-                if para:
-                    paragraphs.append({
-                        "content": para,
-                        "page": page_num
-                    })
-
-    # Second pass: extract tables with better title matching
-    for page_num, page in enumerate(pdf.pages, start=1):
-        page_tables = page.extract_tables()
-        for table in page_tables:
-            # Filter empty tables
-            if table and any(any(cell and cell.strip() for cell in row) for row in table):
-                # Look for table title in nearby paragraphs
-                title = ""
-                current_page_paras = [p for p in paragraphs if p["page"] <= page_num]
-                
-                # Check last few paragraphs for title
-                for para in reversed(current_page_paras[-5:]):
-                    content = para["content"]
-                    if ("表" in content or "Table" in content) and len(content) < 100:
-                        title = content
-                        break
-
-                # Clean table data
-                cleaned_table = [
-                    [cell.strip() if cell else "" for cell in row]
-                    for row in table
-                ]
-
-                tables.append({
-                    "page": page_num,
-                    "index": len(tables),
-                    "title": title,
-                    "data": cleaned_table,
-                    "type": "table"
-                })
-
-    pdf.close()
-    # Cleanup
-    os.remove(temp_file_path)
-    os.rmdir(temp_dir)
-    return tables
-
 def extract_and_process_documents(word_file, pdf_file, use_ocr=True, ocr_engine="tesseract", ocr_instance=None):
     """提取並處理Word和PDF文件內容。"""
     # 提取Word文件內容
@@ -364,13 +302,10 @@ def extract_and_process_documents(word_file, pdf_file, use_ocr=True, ocr_engine=
     # 如果使用OCR，使用OCR引擎提取補充的PDF文本
     pdf_data_ocr = {"paragraphs": [], "tables": []}
     if use_ocr:
-        # 使用指定的OCR引擎提取文本
         pdf_data_ocr = extract_text_from_pdf_with_ocr(pdf_file, ocr_engine, ocr_instance)
-    # Extract PDF content with enhanced table extraction
-    pdf_tables = enhanced_extract_tables_from_pdf(pdf_file)
     # 合併提取的段落和表格
     combined_paragraphs = pdf_data_pymupdf["paragraphs"] + pdf_data_pdfplumber["paragraphs"] + pdf_data_ocr.get("paragraphs", [])
-    combined_tables = pdf_tables + pdf_data_pymupdf["tables"] + pdf_data_ocr.get("tables", [])
+    combined_tables = pdf_data_pymupdf["tables"] + pdf_data_pdfplumber["tables"] + pdf_data_ocr.get("tables", [])
     # 去除重複的段落
     unique_paragraphs = []
     seen_contents = set()
