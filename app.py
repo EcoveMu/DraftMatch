@@ -387,9 +387,13 @@ def main():
                             with st.expander(f"匹配 #{i+1} (相似度: {match['similarity']:.2%})", expanded=True):
                                 st.write(f"PDF 頁碼: {match['pdf_page']}")
                                 
-                                # 移除藍色框，改為直接在匹配標題下顯示Word原稿
+                                # 修改Word原稿顯示方式，使其可調整大小
                                 st.markdown('<div style="font-size: 0.9rem; font-weight: 500; margin-bottom: 3px; color: #1e88e5;">Word 原稿:</div>', unsafe_allow_html=True)
-                                st.markdown(f'<div class="word-scroll-panel">{html.escape(match["word_text"])}</div>', unsafe_allow_html=True)
+                                st.markdown(f'''
+                                <div class="word-scroll-panel" style="resize: both; overflow: auto; min-height: 100px; max-height: 300px;">
+                                    {html.escape(match["word_text"])}
+                                </div>
+                                ''', unsafe_allow_html=True)
                                 
                                 # 根據設置顯示差異標示
                                 st.markdown('<div class="diff-content">', unsafe_allow_html=True)
@@ -484,7 +488,11 @@ def main():
                                         
                                         # 使用更緊湊的樣式顯示 Word 表格
                                         st.markdown('<div style="font-size: 0.9rem; font-weight: 500; margin-bottom: 3px; color: #1e88e5;">Word 表格:</div>', unsafe_allow_html=True)
-                                        st.markdown(f'<div class="word-scroll-panel">{word_table_html}</div>', unsafe_allow_html=True)
+                                        st.markdown(f'''
+                                        <div class="word-scroll-panel" style="resize: both; overflow: auto; min-height: 100px; max-height: 300px;">
+                                            {word_table_html}
+                                        </div>
+                                        ''', unsafe_allow_html=True)
                                         
                                         # 顯示 PDF 表格
                                         st.markdown("**PDF 表格**")

@@ -427,8 +427,10 @@
     margin-bottom: 0.5rem !important;
 }
 
-/* Word原稿面板樣式 - 可調整大小 */
-.word-scroll-panel {
+/* Word原稿面板樣式 - 可調整大小 (增強版) */
+.word-scroll-panel,
+div[data-testid="stMarkdownContainer"] .word-scroll-panel,
+div[class*="stMarkdown"] .word-scroll-panel {
     background-color: #f8f9fa;
     border: 1px solid #dee2e6;
     border-radius: 4px;
@@ -440,10 +442,30 @@
     max-height: 300px;
     resize: both !important;    /* 允許調整大小 */
     overflow: auto !important;  /* 確保超出部分能夠滾動 */
+    display: block !important;  /* 確保元素是塊級元素 */
+    position: relative !important; /* 啟用定位 */
+    z-index: 100 !important;    /* 確保在其他元素上方 */
 }
 
 /* 調整光標在邊緣處的顯示效果 */
-.word-scroll-panel:hover {
+.word-scroll-panel:hover,
+div[data-testid="stMarkdownContainer"] .word-scroll-panel:hover,
+div[class*="stMarkdown"] .word-scroll-panel:hover {
     cursor: se-resize;
     border-color: var(--primary-color);
+    border-width: 2px;
+}
+
+/* 確保可調整大小的角落提示 */
+.word-scroll-panel::after,
+div[data-testid="stMarkdownContainer"] .word-scroll-panel::after,
+div[class*="stMarkdown"] .word-scroll-panel::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 10px;
+    height: 10px;
+    background: linear-gradient(135deg, transparent 50%, var(--primary-color) 50%);
+    cursor: se-resize;
 }
