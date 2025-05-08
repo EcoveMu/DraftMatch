@@ -219,6 +219,57 @@ def generate_diff_html(text1: str, text2: str, ignore_options: Dict[str, bool]) 
             
     return "".join(html)
 
+def generate_enhanced_diff_html(word_text: str, pdf_text: str) -> str:
+    """
+    以PDF內容為主生成增強型差異標示HTML。
+    相同的內容顯示為灰色，不同的內容顯示為紅色。
+    
+    Args:
+        word_text: Word文件文本
+        pdf_text: PDF文件文本
+        
+    Returns:
+        str: 帶有差異標示的HTML
+    """
+    # 將PDF文本按行分割
+    pdf_lines = pdf_text.splitlines()
+    
+    # 將Word文本按行分割，並移除空行
+    word_lines = [line.strip() for line in word_text.splitlines() if line.strip()]
+    
+    # 相似度閾值，超過此值視為相同
+    SIMILARITY_THRESHOLD = 0.85
+    
+    # 檢查每行PDF內容是否存在於Word文本中
+    html_parts = []
+    for i, pdf_line in enumerate(pdf_lines):
+        pdf_line = pdf_line.strip()
+        if not pdf_line:
+            html_parts.append("<br>")  # 空行保持原樣
+            continue
+        
+        # 初始化相似度和最佳匹配
+        max_similarity = 0
+        best_match = None
+        
+        # 與每個Word行比較，找出最佳匹配
+        for word_line in word_lines:
+            # 計算相似度
+            similarity = difflib.SequenceMatcher(None, pdf_line, word_line).ratio()
+            if similarity > max_similarity:
+                max_similarity = similarity
+                best_match = word_line
+        
+        # 判斷是否為相同內容
+        if max_similarity >= SIMILARITY_THRESHOLD:
+            # 相同內容顯示為灰色
+            html_parts.append(f"<span style='color: gray;'>{html.escape(pdf_line)}</span><br>")
+        else:
+            # 不同內容顯示為紅色
+            html_parts.append(f"<span style='color: red;'>{html.escape(pdf_line)}</span><br>")
+    
+    return "".join(html_parts)
+
 def compare_pdf_first(word_data, pdf_data, comparison_mode="hybrid", similarity_threshold=0.6, 
                     ignore_options=None, ai_instance=None, ocr_instance=None):
     """
@@ -286,6 +337,9 @@ def compare_pdf_first(word_data, pdf_data, comparison_mode="hybrid", similarity_
                 # 使用 difflib 生成差異標記
                 diff_html = generate_diff_html(best_word_text, pdf_text, ignore_options)
                 
+                # 生成增強型差異標記
+                enhanced_diff_html = generate_enhanced_diff_html(best_word_text, pdf_text)
+                
                 # 添加到結果
                 match = {
                     "word_indices": best_word_indices,
@@ -295,6 +349,7 @@ def compare_pdf_first(word_data, pdf_data, comparison_mode="hybrid", similarity_
                     "similarity": best_similarity,
                     "pdf_page": page,
                     "diff_html": diff_html,
+                    "enhanced_diff_html": enhanced_diff_html,
                 }
                 
                 # 如果啟用了 AI 比對，添加句子級別的差異摘要

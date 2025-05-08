@@ -58,6 +58,8 @@ def main():
         st.session_state.ocr_engine = "qwen_builtin"
     if 'ocr_api_key' not in st.session_state:
         st.session_state.ocr_api_key = ""
+    if 'use_enhanced_diff' not in st.session_state:
+        st.session_state.use_enhanced_diff = True
     
     # 側邊欄設定
     with st.sidebar:
@@ -94,6 +96,13 @@ def main():
             
             if st.session_state.ocr_engine == "ocr_custom":
                 st.session_state.ocr_api_key = st.text_input("OCR API Key", type="password", value=st.session_state.ocr_api_key)
+        
+        # 差異標示設定
+        st.divider()
+        st.subheader("🔄 比對設定")
+        st.session_state.use_enhanced_diff = st.checkbox("使用增強型差異標示", 
+                                                          value=st.session_state.use_enhanced_diff,
+                                                          help="啟用後，以PDF內容為主，灰色表示相同內容，紅色表示不同內容")
     
     # 檔案上傳區
     col1, col2 = st.columns(2)
@@ -202,8 +211,13 @@ def main():
                                     st.markdown("**PDF 內容**")
                                     st.text_area("", match['pdf_text'], height=150, key=f"pdf_text_{i}")
                                 
-                                st.markdown("**差異標示:**")
-                                st.markdown(match['diff_html'], unsafe_allow_html=True)
+                                # 根據設置顯示差異標示
+                                if st.session_state.use_enhanced_diff:
+                                    st.markdown("**增強型差異標示 (PDF內容為主，灰色為相同，紅色為不同):**")
+                                    st.markdown(match['enhanced_diff_html'], unsafe_allow_html=True)
+                                else:
+                                    st.markdown("**標準差異標示:**")
+                                    st.markdown(match['diff_html'], unsafe_allow_html=True)
                                 
                                 # 差異摘要
                                 if match.get('diff_summary'):
