@@ -311,40 +311,49 @@ class QwenOCR:
                     "parameters": {"result_format": "message"}
                 }
                 response = requests.post(self.api_url, headers=headers, json=payload)
-            # 解析API回應
+            
             if response.status_code == 200:
-                result = response.json()
-                content = result["choices"][0]["message"]["content"] if self.use_free_api else result["output"]["choices"][0]["message"]["content"]
+                # 從回應中提取JSON坐標
+                if self.use_free_api:
+                    result = response.json()
+                    extracted_text = result["choices"][0]["message"]["content"]
+                else:
+                    result = response.json()
+                    extracted_text = result["output"]["choices"][0]["message"]["content"]
+                
+                # 解析JSON
                 try:
-                    # 尋找JSON格式的坐標
-                    json_start = content.find("{")
-                    json_end = content.rfind("}") + 1
-                    if json_start != -1 and json_end != -1:
-                        json_content = content[json_start:json_end]
-                        coordinates = json.loads(json_content)
-                        # 打開圖像並繪製矩形
-                        image = Image.open(image_path)
-                        draw = ImageDraw.Draw(image)
-                        if isinstance(coordinates, dict) and "coordinates" in coordinates:
-                            coords = coordinates["coordinates"]
-                            x1, y1, x2, y2 = coords[0], coords[1], coords[2], coords[3]
-                        elif isinstance(coordinates, list) and len(coordinates) == 4:
-                            x1, y1, x2, y2 = coordinates
-                        elif isinstance(coordinates, dict) and "x1" in coordinates:
-                            x1 = coordinates["x1"]; y1 = coordinates["y1"]; x2 = coordinates["x2"]; y2 = coordinates["y2"]
-                        else:
-                            # 如果無法解析，默認標記整個圖像
-                            x1, y1, x2, y2 = 0, 0, image.width, image.height
-                        # 繪製紅色矩形框標記文本位置
-                        draw.rectangle([x1, y1, x2, y2], outline="red", width=3)
-                        # 保存標記後的圖像
-                        if output_path:
-                            image.save(output_path)
-                        else:
-                            temp_dir = tempfile.mkdtemp()
-                            output_path = os.path.join(temp_dir, "highlighted_image.png")
-                            image.save(output_path)
-                        return output_path
+                    # 找到JSON部分並解析
+                    import re
+                    json_pattern = r'\{[\s\S]*?\}'
+                    json_match = re.search(json_pattern, extracted_text)
+                    if json_match:
+                        coordinates_json = json_match.group(0)
+                        coordinates = json.loads(coordinates_json)
+                        
+                        # 確保坐標存在且有效
+                        if "x1" in coordinates and "y1" in coordinates and "x2" in coordinates and "y2" in coordinates:
+                            # 讀取原始圖像並繪製矩形框
+                            image = Image.open(image_path)
+                            draw = ImageDraw.Draw(image)
+                            
+                            # 轉換坐標為整數
+                            x1 = int(coordinates["x1"])
+                            y1 = int(coordinates["y1"])
+                            x2 = int(coordinates["x2"])
+                            y2 = int(coordinates["y2"])
+                            
+                            # 繪製紅色矩形框
+                            draw.rectangle([(x1, y1), (x2, y2)], outline="red", width=2)
+                            
+                            # 保存標記後的圖像
+                            if output_path:
+                                image.save(output_path)
+                            else:
+                                temp_dir = tempfile.mkdtemp()
+                                output_path = os.path.join(temp_dir, "highlighted_image.png")
+                                image.save(output_path)
+                            return output_path
                     else:
                         return None
                 except Exception as e:

@@ -6,6 +6,17 @@ from docx import Document
 from text_preview import TextPreview
 from table_processor import TableProcessor
 from comparison_algorithm import compare_pdf_first
+from qwen_ocr import QwenOCR
+
+def initialize_ocr():
+    """根據用戶選擇初始化OCR實例"""
+    ocr_instance = None
+    if st.session_state.use_ocr:
+        if st.session_state.ocr_engine == "qwen_builtin":
+            ocr_instance = QwenOCR()  # 內建免費API
+        elif st.session_state.ocr_engine == "ocr_custom" and st.session_state.ocr_api_key:
+            ocr_instance = QwenOCR(api_key=st.session_state.ocr_api_key)
+    return ocr_instance
 
 def main():
     # 設定頁面
@@ -15,6 +26,14 @@ def main():
     st.title("文件比對系統")
     st.write("本系統用於比對 Word 原稿與 PDF 完稿，支援文字與表格比對，並可辨識無文字內容的文件。")
     
+    # 初始化會話狀態
+    if 'use_ocr' not in st.session_state:
+        st.session_state.use_ocr = True
+    if 'ocr_engine' not in st.session_state:
+        st.session_state.ocr_engine = "qwen_builtin"
+    if 'ocr_api_key' not in st.session_state:
+        st.session_state.ocr_api_key = ""
+    
     # 側邊欄設定
     with st.sidebar:
         st.header("功能說明")
@@ -23,6 +42,23 @@ def main():
                 "3. 如無法提取文字，自動使用 OCR\n"
                 "4. 選擇「文字比對」或「表格比對」標籤\n"
                 "5. 點擊相應按鈕開始比對")
+        
+        # OCR 設定
+        st.divider()
+        st.subheader("🔍 OCR 設定")
+        st.session_state.use_ocr = st.checkbox("啟用 OCR", value=st.session_state.use_ocr)
+        if st.session_state.use_ocr:
+            ocr_labels = {
+                "Qwen（內建）": "qwen_builtin",
+                "EasyOCR（內建）": "easyocr",
+                "Tesseract（內建）": "tesseract",
+                "自定義 OCR API": "ocr_custom",
+            }
+            current = next(k for k, v in ocr_labels.items() if v == st.session_state.ocr_engine)
+            ocr_label = st.radio("OCR 引擎", list(ocr_labels.keys()), horizontal=True, index=list(ocr_labels.keys()).index(current))
+            st.session_state.ocr_engine = ocr_labels[ocr_label]
+            if st.session_state.ocr_engine == "ocr_custom":
+                st.session_state.ocr_api_key = st.text_input("OCR API Key", type="password", value=st.session_state.ocr_api_key)
     
     # 檔案上傳區
     col1, col2 = st.columns(2)
@@ -41,6 +77,9 @@ def main():
             f.write(word_file.getvalue())
         with open(pdf_path, "wb") as f:
             f.write(pdf_file.getvalue())
+        
+        # 初始化OCR實例
+        ocr_instance = initialize_ocr()
         
         # 初始化處理器
         text_previewer = TextPreview()
@@ -100,7 +139,7 @@ def main():
                         pdf_data = {'paragraphs': pdf_content}
                         
                         # 執行比對
-                        results = compare_pdf_first(word_data, pdf_data)
+                        results = compare_pdf_first(word_data, pdf_data, ocr_instance=ocr_instance)
                     
                     # 顯示比對結果
                     st.subheader("文字比對結果")

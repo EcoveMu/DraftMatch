@@ -7,6 +7,7 @@ import os
 import io
 from PIL import Image
 import numpy as np
+import tempfile
 
 class TextPreview:
     def __init__(self):
@@ -119,9 +120,19 @@ class TextPreview:
                 pix = page.get_pixmap()
                 img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
                 
-                # 使用 Qwen OCR 提取文字
-                text = self.qwen_ocr.extract_text(img)
-                if text.strip():
+                # 將圖片保存為臨時文件
+                temp_dir = tempfile.mkdtemp()
+                temp_img_path = os.path.join(temp_dir, f"page_{page_num}.png")
+                img.save(temp_img_path)
+                
+                # 使用 QwenOCR 提取文字
+                text = self.qwen_ocr.extract_text_from_image(temp_img_path)
+                
+                # 清理臨時文件
+                os.remove(temp_img_path)
+                os.rmdir(temp_dir)
+                
+                if text and not text.startswith("提取文本時出錯"):
                     paragraphs.append({
                         'index': paragraph_index,
                         'content': text.strip(),
@@ -146,7 +157,8 @@ class TextPreview:
             if text:
                 paragraphs.append({
                     'index': page_num,
-                    'content': text
+                    'content': text,
+                    'page': page_num + 1
                 })
             else:
                 # 如果沒有文字，使用 OCR
@@ -154,14 +166,24 @@ class TextPreview:
                 
                 # 將頁面轉換為圖片
                 pix = page.get_pixmap()
-                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
                 
-                # 使用 Qwen OCR 提取文字
-                text = self.qwen_ocr.extract_text(img)
-                if text.strip():
+                # 將圖像保存為臨時文件
+                temp_dir = tempfile.mkdtemp()
+                temp_img_path = os.path.join(temp_dir, f"page_{page_num}.png")
+                pix.save(temp_img_path)
+                
+                # 使用 QwenOCR 提取文字
+                text = self.qwen_ocr.extract_text_from_image(temp_img_path)
+                
+                # 清理臨時文件
+                os.remove(temp_img_path)
+                os.rmdir(temp_dir)
+                
+                if text and not text.startswith("提取文本時出錯"):
                     paragraphs.append({
                         'index': page_num,
-                        'content': text.strip()
+                        'content': text.strip(),
+                        'page': page_num + 1
                     })
         
         doc.close()
@@ -208,7 +230,7 @@ class TextPreview:
                 st.warning("PDF 文件中沒有找到任何內容")
             else:
                 for para in pdf_content:
-                    st.write(f"頁碼 {para['index'] + 1}:")
+                    st.write(f"頁碼 {para.get('page', para['index'] + 1)}:")
                     st.text_area("", para['content'], height=100, key=f"pdf_para_{para['index']}")
         
         return False 

@@ -52,30 +52,48 @@ class TableProcessor:
                 
                 # 將頁面轉換為圖片
                 pix = page.get_pixmap()
-                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                
+                # 保存為臨時圖像文件
+                temp_dir = tempfile.mkdtemp()
+                temp_img_path = os.path.join(temp_dir, f"page_{page_num}.png")
+                pix.save(temp_img_path)
                 
                 # 嘗試使用 OCR 提取文字
                 text = ""
                 try:
-                    # 先嘗試使用 extract_text_from_image 方法
-                    # 將圖片保存為臨時文件
-                    temp_dir = tempfile.mkdtemp()
-                    temp_img_path = os.path.join(temp_dir, f"page_{page_num}.png")
-                    img.save(temp_img_path)
-                    
+                    # 使用 QwenOCR 提取文字
                     text = self.qwen_ocr.extract_text_from_image(temp_img_path)
                     
-                    # 清理臨時文件
-                    os.remove(temp_img_path)
-                    os.rmdir(temp_dir)
+                    # 使用 QwenOCR 提取表格
+                    extracted_tables = self.qwen_ocr.extract_tables_from_image(temp_img_path)
+                    
+                    # 如果直接從QwenOCR獲取到表格
+                    if isinstance(extracted_tables, list) and extracted_tables:
+                        for table_idx, table_data in enumerate(extracted_tables):
+                            if table_data and len(table_data) >= 2 and len(table_data[0]) >= 2:
+                                tables.append({
+                                    'index': len(tables),
+                                    'data': table_data,
+                                    'page': page_num + 1
+                                })
+                        
+                        # 清理臨時文件並繼續下一頁
+                        os.remove(temp_img_path)
+                        os.rmdir(temp_dir)
+                        continue
+                    
                 except Exception as e:
-                    st.warning(f"使用 extract_text_from_image 提取 PDF 第 {page_num + 1} 頁文字失敗: {str(e)}")
-                    # 如果 extract_text_from_image 失敗，嘗試其他方法
+                    st.warning(f"使用 QwenOCR 提取 PDF 第 {page_num + 1} 頁文字失敗: {str(e)}")
+                    # 如果 QwenOCR 失敗，嘗試其他方法
                     try:
                         # 使用提取 PDF 文字的原生方法
                         text = page.get_text()
                     except Exception as e2:
                         st.warning(f"使用 get_text 提取 PDF 第 {page_num + 1} 頁文字失敗: {str(e2)}")
+                
+                # 清理臨時文件
+                os.remove(temp_img_path)
+                os.rmdir(temp_dir)
                 
                 # 如果沒有成功提取文字，則繼續下一頁
                 if not text or not text.strip():

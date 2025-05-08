@@ -38,7 +38,7 @@ def extract_text_from_word(file):
             table_data.append(row_data)
         # 跳過完全空白的表格
         if any(any(cell for cell in row) for row in table_data):
-            # 嘗試獲取表格標題（表格前最近的段落中包含“表”或“Table”的作為標題）
+            # 嘗試獲取表格標題（表格前最近的段落中包含"表"或"Table"的作為標題）
             title = ""
             if paragraphs:
                 for j in range(len(paragraphs)-1, -1, -1):
