@@ -7,15 +7,40 @@ from text_preview import TextPreview
 from table_processor import TableProcessor
 from comparison_algorithm import compare_pdf_first
 from qwen_ocr import QwenOCR
+from easyocr_wrapper import EasyOCR
+from tesseract_wrapper import TesseractOCR
 
 def initialize_ocr():
     """根據用戶選擇初始化OCR實例"""
     ocr_instance = None
     if st.session_state.use_ocr:
-        if st.session_state.ocr_engine == "qwen_builtin":
-            ocr_instance = QwenOCR()  # 內建免費API
-        elif st.session_state.ocr_engine == "ocr_custom" and st.session_state.ocr_api_key:
-            ocr_instance = QwenOCR(api_key=st.session_state.ocr_api_key)
+        try:
+            if st.session_state.ocr_engine == "qwen_builtin":
+                ocr_instance = QwenOCR()  # 內建免費API
+                if ocr_instance.is_available():
+                    st.sidebar.success("Qwen OCR 初始化成功")
+                else:
+                    st.sidebar.error("Qwen OCR 初始化失敗")
+            elif st.session_state.ocr_engine == "easyocr":
+                ocr_instance = EasyOCR()  # 使用EasyOCR
+                if ocr_instance.is_available():
+                    st.sidebar.success("EasyOCR 初始化成功")
+                else:
+                    st.sidebar.error("EasyOCR 初始化失敗，請確保已安裝相關套件")
+            elif st.session_state.ocr_engine == "tesseract":
+                ocr_instance = TesseractOCR()  # 使用Tesseract
+                if ocr_instance.is_available():
+                    st.sidebar.success("Tesseract OCR 初始化成功")
+                else:
+                    st.sidebar.error("Tesseract OCR 初始化失敗，請確保已安裝Tesseract和pytesseract")
+            elif st.session_state.ocr_engine == "ocr_custom" and st.session_state.ocr_api_key:
+                ocr_instance = QwenOCR(api_key=st.session_state.ocr_api_key)
+                if ocr_instance.is_available():
+                    st.sidebar.success("自定義 OCR API 初始化成功")
+                else:
+                    st.sidebar.error("自定義 OCR API 初始化失敗，請檢查API Key")
+        except Exception as e:
+            st.sidebar.error(f"OCR 初始化錯誤: {str(e)}")
     return ocr_instance
 
 def main():
@@ -57,6 +82,16 @@ def main():
             current = next(k for k, v in ocr_labels.items() if v == st.session_state.ocr_engine)
             ocr_label = st.radio("OCR 引擎", list(ocr_labels.keys()), horizontal=True, index=list(ocr_labels.keys()).index(current))
             st.session_state.ocr_engine = ocr_labels[ocr_label]
+            
+            # 顯示所選OCR引擎的說明
+            ocr_descriptions = {
+                "qwen_builtin": "**Qwen OCR**：使用通義千問API的視覺模型進行OCR，支援表格識別。無需額外安裝。",
+                "easyocr": "**EasyOCR**：開源OCR工具，支援多語言，需要安裝額外相依套件。表格識別功能有限。",
+                "tesseract": "**Tesseract**：最知名的開源OCR引擎，需要安裝Tesseract和pytesseract套件。",
+                "ocr_custom": "**自定義API**：使用您提供的API密鑰調用Qwen API，如有商業需求請使用此選項。"
+            }
+            st.markdown(ocr_descriptions[st.session_state.ocr_engine])
+            
             if st.session_state.ocr_engine == "ocr_custom":
                 st.session_state.ocr_api_key = st.text_input("OCR API Key", type="password", value=st.session_state.ocr_api_key)
     
@@ -81,9 +116,9 @@ def main():
         # 初始化OCR實例
         ocr_instance = initialize_ocr()
         
-        # 初始化處理器
-        text_previewer = TextPreview()
-        table_processor = TableProcessor()
+        # 初始化處理器，並傳入OCR實例
+        text_previewer = TextPreview(ocr_instance=ocr_instance)
+        table_processor = TableProcessor(ocr_instance=ocr_instance)
         
         # 提取內容
         with st.spinner("正在提取文件內容..."):

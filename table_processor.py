@@ -11,8 +11,9 @@ import tempfile
 import os
 
 class TableProcessor:
-    def __init__(self):
-        self.qwen_ocr = QwenOCR()
+    def __init__(self, ocr_instance=None):
+        # 如果提供了OCR實例，使用它，否則默認使用QwenOCR
+        self.ocr_instance = ocr_instance or QwenOCR()
         
     def extract_word_tables(self, word_file):
         """從 Word 文件中提取表格"""
@@ -58,16 +59,16 @@ class TableProcessor:
                 temp_img_path = os.path.join(temp_dir, f"page_{page_num}.png")
                 pix.save(temp_img_path)
                 
-                # 嘗試使用 OCR 提取文字
+                # 嘗試使用 OCR 提取文字和表格
                 text = ""
-                try:
-                    # 使用 QwenOCR 提取文字
-                    text = self.qwen_ocr.extract_text_from_image(temp_img_path)
+                if self.ocr_instance and self.ocr_instance.is_available():
+                    # 使用OCR提取文字
+                    text = self.ocr_instance.extract_text_from_image(temp_img_path)
                     
-                    # 使用 QwenOCR 提取表格
-                    extracted_tables = self.qwen_ocr.extract_tables_from_image(temp_img_path)
+                    # 提取表格
+                    extracted_tables = self.ocr_instance.extract_tables_from_image(temp_img_path)
                     
-                    # 如果直接從QwenOCR獲取到表格
+                    # 如果直接從OCR獲取到表格
                     if isinstance(extracted_tables, list) and extracted_tables:
                         for table_idx, table_data in enumerate(extracted_tables):
                             if table_data and len(table_data) >= 2 and len(table_data[0]) >= 2:
@@ -81,15 +82,22 @@ class TableProcessor:
                         os.remove(temp_img_path)
                         os.rmdir(temp_dir)
                         continue
-                    
-                except Exception as e:
-                    st.warning(f"使用 QwenOCR 提取 PDF 第 {page_num + 1} 頁文字失敗: {str(e)}")
-                    # 如果 QwenOCR 失敗，嘗試其他方法
+                else:
+                    # 如果沒有可用的OCR實例，嘗試使用pytesseract
                     try:
-                        # 使用提取 PDF 文字的原生方法
+                        import pytesseract
+                        img = Image.open(temp_img_path)
+                        text = pytesseract.image_to_string(img, lang='chi_tra+eng')
+                    except Exception as e:
+                        st.warning(f"提取 PDF 第 {page_num + 1} 頁文字失敗: {str(e)}")
+                        text = ""
+                
+                # 如果OCR提取失敗，嘗試使用PyMuPDF的本地提取
+                if not text:
+                    try:
                         text = page.get_text()
-                    except Exception as e2:
-                        st.warning(f"使用 get_text 提取 PDF 第 {page_num + 1} 頁文字失敗: {str(e2)}")
+                    except Exception as e:
+                        st.warning(f"使用 get_text 提取 PDF 第 {page_num + 1} 頁文字失敗: {str(e)}")
                 
                 # 清理臨時文件
                 os.remove(temp_img_path)

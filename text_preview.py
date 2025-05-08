@@ -10,8 +10,9 @@ import numpy as np
 import tempfile
 
 class TextPreview:
-    def __init__(self):
-        self.qwen_ocr = QwenOCR()
+    def __init__(self, ocr_instance=None):
+        # 如果提供了OCR實例，使用它，否則默認使用QwenOCR
+        self.ocr_instance = ocr_instance or QwenOCR()
         
     def extract_word_content(self, word_file):
         """從 Word 文件中提取內容，如果沒有文字則使用 OCR，提取所有元素包括標題、目錄等"""
@@ -118,21 +119,26 @@ class TextPreview:
                 page = pdf_doc[page_num]
                 # 將頁面轉換為圖片
                 pix = page.get_pixmap()
-                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
                 
                 # 將圖片保存為臨時文件
                 temp_dir = tempfile.mkdtemp()
                 temp_img_path = os.path.join(temp_dir, f"page_{page_num}.png")
-                img.save(temp_img_path)
+                pix.save(temp_img_path)
                 
-                # 使用 QwenOCR 提取文字
-                text = self.qwen_ocr.extract_text_from_image(temp_img_path)
+                # 使用OCR提取文字
+                if self.ocr_instance and self.ocr_instance.is_available():
+                    text = self.ocr_instance.extract_text_from_image(temp_img_path)
+                else:
+                    # 備選：使用pytesseract
+                    img = Image.open(temp_img_path)
+                    import pytesseract
+                    text = pytesseract.image_to_string(img, lang='chi_tra+eng')
                 
                 # 清理臨時文件
                 os.remove(temp_img_path)
                 os.rmdir(temp_dir)
                 
-                if text and not text.startswith("提取文本時出錯"):
+                if text and not (isinstance(text, str) and text.startswith("提取文本時出錯")):
                     paragraphs.append({
                         'index': paragraph_index,
                         'content': text.strip(),
@@ -172,14 +178,20 @@ class TextPreview:
                 temp_img_path = os.path.join(temp_dir, f"page_{page_num}.png")
                 pix.save(temp_img_path)
                 
-                # 使用 QwenOCR 提取文字
-                text = self.qwen_ocr.extract_text_from_image(temp_img_path)
+                # 使用OCR提取文字
+                if self.ocr_instance and self.ocr_instance.is_available():
+                    text = self.ocr_instance.extract_text_from_image(temp_img_path)
+                else:
+                    # 備選：使用pytesseract
+                    img = Image.open(temp_img_path)
+                    import pytesseract
+                    text = pytesseract.image_to_string(img, lang='chi_tra+eng')
                 
                 # 清理臨時文件
                 os.remove(temp_img_path)
                 os.rmdir(temp_dir)
                 
-                if text and not text.startswith("提取文本時出錯"):
+                if text and not (isinstance(text, str) and text.startswith("提取文本時出錯")):
                     paragraphs.append({
                         'index': page_num,
                         'content': text.strip(),

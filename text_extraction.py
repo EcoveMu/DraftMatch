@@ -198,16 +198,30 @@ def extract_text_from_pdf_with_ocr(file, ocr_engine="tesseract", ocr_instance=No
         pix = page.get_pixmap(matrix=fitz.Matrix(300/72, 300/72))
         img_path = os.path.join(temp_dir, f"page_{i+1}.png")
         pix.save(img_path)
+        
         # 根據指定的OCR引擎提取文本
-        if ocr_engine.lower() == "qwen" and ocr_instance:
-            text, _ = ocr_instance.extract_text_from_pdf_page(temp_file_path, i)
-            if isinstance(text, str) and text.startswith("從PDF提取文本時出錯"):
+        text = None
+        if ocr_instance and ocr_instance.is_available():
+            if ocr_engine.lower() in ["qwen_builtin", "qwen"]:
+                text, _ = ocr_instance.extract_text_from_pdf_page(temp_file_path, i)
+                if isinstance(text, str) and text.startswith("從PDF提取文本時出錯"):
+                    text = ocr_instance.extract_text_from_image(img_path)
+            elif ocr_engine.lower() in ["easyocr", "tesseract", "ocr_custom"]:
                 text = ocr_instance.extract_text_from_image(img_path)
-        else:
-            # 默認使用Tesseract OCR
-            img = Image.open(img_path)
-            text = pytesseract.image_to_string(img, lang='chi_tra+eng')
+        
+        # 如果沒有OCR實例或OCR提取失敗，使用默認的Tesseract
+        if text is None or not isinstance(text, str) or len(text.strip()) == 0:
+            try:
+                # 嘗試使用Tesseract作為備選
+                img = Image.open(img_path)
+                text = pytesseract.image_to_string(img, lang='chi_tra+eng')
+                print(f"使用備選Tesseract OCR提取文本")
+            except Exception as e:
+                print(f"備選OCR失敗: {str(e)}")
+                text = ""
+        
         print(f"OCR頁面 {i+1} 提取的文本長度: {len(text) if text else 0}")
+        
         # 保存提取到的段落
         if text:
             page_paragraphs = text.split('\n\n')
@@ -220,8 +234,9 @@ def extract_text_from_pdf_with_ocr(file, ocr_engine="tesseract", ocr_instance=No
                         "page": i + 1,
                         "type": "paragraph"
                     })
-        # 提取表格：如果使用Qwen OCR，引擎支援表格提取
-        if ocr_engine.lower() == "qwen" and ocr_instance:
+        
+        # 提取表格
+        if ocr_instance and ocr_instance.is_available():
             tables = ocr_instance.extract_tables_from_image(img_path)
             if isinstance(tables, list):
                 for table in tables:
@@ -269,14 +284,16 @@ def extract_text_from_pdf_with_ocr(file, ocr_engine="tesseract", ocr_instance=No
                         })
                     table_start = -1
                     table_end = -1
-    doc.close()
+    
     # 清理臨時文件
+    doc.close()
     for i in range(len(doc)):
         img_path = os.path.join(temp_dir, f"page_{i+1}.png")
         if os.path.exists(img_path):
             os.remove(img_path)
     os.remove(temp_file_path)
     os.rmdir(temp_dir)
+    
     return {"paragraphs": all_paragraphs, "tables": all_tables}
 
 def enhanced_extract_tables_from_pdf(file) -> list:
